@@ -81,35 +81,35 @@ end
 
 # GET THE ARGV VALUES
 if ARGV.flags.e?
-  isEXTENDED=1
+  EXTENDED=1
 else
-  isEXTENDED=0
+  EXTENDED=0
 end
 
 if ARGV.flags.vv?
-  isDEBUG=2
+  DEBUG=2
 elsif ARGV.flags.v?
-  isDEBUG=1
+  DEBUG=1
 else
-  isDEBUG=0
+  DEBUG=0
 end
 
 if ARGV.flags.c?
-  tCRITICAL=ARGV.flags.c.to_f
+  timeCritical=ARGV.flags.c.to_f
 else
-  tCRITICAL=60
+  timeCritical=60
 end
 
 if ARGV.flags.w?
-  tWARN=ARGV.flags.w.to_f
+  timeWarn=ARGV.flags.w.to_f
 else
-  tWARN=5
+  timeWarn=5
 end
 
 if ARGV.flags.w2?
-  tWARN2=ARGV.flags.w2.to_f
+  timeWarn2=ARGV.flags.w2.to_f
 else
-  tWARN2=10
+  timeWarn2=10
 end
 
 if ARGV.flags.k?
@@ -119,9 +119,9 @@ else
 end
 
 inputURL=ARGV.flags.u
-requestTimeout=180
+REQUESTTIMEOUT=180
 
-if isDEBUG >= 2;puts "\n * ARGS: c=#{tCRITICAL} w=#{tWARN} e=#{isEXTENDED} w2=#{tWARN2} u=#{ARGV.flags.u}";end
+if DEBUG >= 2: puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
 ## PARSE INPUT URL
 ###############################################################
@@ -144,7 +144,6 @@ end
 ## Remove ssl certificate warning
 #  http://www.5dollarwhitebox.org/drupal/node/64
 ###############################################################
-
 class Net::HTTP
   alias_method :old_initialize, :initialize
   def initialize(*args)
@@ -154,16 +153,21 @@ class Net::HTTP
   end
 end
 
+## get url function
+###############################################################
+def getUrl( parsedUri )
+  _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
+  if parsedUri.scheme == "https"
+    _h.use_ssl = true
+  end
+  _h.read_timeout=REQUESTTIMEOUT
+  return _h.get(parsedUri.path, nil)
+end
 ## PART 1 - get main page and parse it
 ###############################################################
 tStart = Time.now
-if isDEBUG >= 1;puts "\n * Get main page: #{mainUrl}";end
-h = Net::HTTP.new( mainUrl.host, mainUrl.port)
-if mainUrl.scheme == "https"
-  h.use_ssl = true
-end
-h.read_timeout=requestTimeout
-resp, data = h.get(mainUrl.path, nil)
+if DEBUG >= 1: puts "\n * Get main page: #{mainUrl}" end
+resp, data = getUrl(mainUrl)
 
 ## handle redirection
 ###############################################################
@@ -175,16 +179,11 @@ while resp.code == "302" || resp.code == "301"
     puts "Critical: can't parse redirected url ..."
     exit 2
   end
-  if isDEBUG >= 1;puts "   -> #{resp.code}, main page is now: #{mainUrl}";end
-  h = Net::HTTP.new( mainUrl.host, mainUrl.port)
-  if mainUrl.scheme == "https"
-    h.use_ssl = true
-  end
-  h.read_timeout=requestTimeout
-  resp, data = h.get(mainUrl.path, nil)
-  i+=1
+  if DEBUG >= 1: puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
+  resp, data = getUrl(mainUrl)
+  i+=1 #TODO DO BETTER ...
   if i >= 5
-    if isDEBUG >= 1;puts "   -> too much redirect (5), exit";end
+    if DEBUG >= 1;puts "   -> too much redirect (5), exit";end
     exit 2
   end
 end
@@ -215,21 +214,21 @@ end
 ###############################################################
 tsize=data.length
 
-if isDEBUG >= 1;puts "[#{resp.code}] #{resp.message} s(#{tsize}) t(#{Time.now-tStart})";end
+if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} s(#{tsize}) t(#{Time.now-tStart})" end
 
 ## Parsing main page data
 ###############################################################
 doc = Hpricot(data)
-parsingResult = doc.search("//img[@src]").map { |x| x['src'] }
+parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
 parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
-#parsingResult = parsingResult + doc.search("//SCRIPT[@SRC]").map { |x| x['src'] }
+parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
 parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
 parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
 
 ## Pop the wanted links
 ###############################################################
 linksToDl = []
-if isDEBUG >= 2;puts "\n * parsing results (#{parsingResult.length}) ...";end
+if DEBUG >= 2: puts "\n * parsing results (#{parsingResult.length}) ..." end
 parsingResult.length.times do |i|
   #change link to full link
   if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
@@ -243,45 +242,39 @@ parsingResult.length.times do |i|
     #test if url
     url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
     if url.host != mainUrl.host
-      if isDEBUG >= 2;puts "#{parsingResult[i]} -> pass";end
+      if DEBUG >= 2: puts "#{parsingResult[i]} -> pass" end
       next
     end
 
   rescue URI::InvalidURIError
-    if isDEBUG >= 2;puts "#{parsingResult[i]} -> error";end
+    if DEBUG >= 2: puts "#{parsingResult[i]} -> error" end
     next
   end
-  if isDEBUG >= 2;puts "#{parsingResult[i]} -> add";end
+  if DEBUG >= 2: puts "#{parsingResult[i]} -> add" end
   linksToDl.push(url)
 end
 
-if isDEBUG >= 2;linksToDlPrevCount=linksToDl.length;end
+if DEBUG >= 2: linksToDlPrevCount=linksToDl.length end
 linksToDl.uniq!
-if isDEBUG >= 2;puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}";end
+if DEBUG >= 2: puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
 
 ## PART 2 - DL content links
 ###############################################################
 tdl=0 #Stat total download
 fileErrorCount=0
-if isDEBUG >= 1;puts "\n * downloading inner links (#{linksToDl.length}) ...";end
+if DEBUG >= 1: puts "\n * downloading inner links (#{linksToDl.length}) ..." end
 threads = []
 linksToDl.each {  |link|
   threads << Thread.new(link) { |myLink|
-      t0 = Time.now
-      h = Net::HTTP.new(myLink.host, myLink.port)
-      if mainUrl.scheme == "https"
-        h.use_ssl = true
-      end
-      h.read_timeout=requestTimeout
-      resp, data = h.get(myLink.path, nil)
-      t1 = Time.now-t0
-      size=data.length
-      tdl+=t1
-      tsize+=size
-      if resp.code != "200"
-        fileErrorCount+=1
-      end
-      if isDEBUG >= 1;puts "[#{resp.code}] #{resp.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{size}o) t("+sprintf("%.2f", t1)+"s)";end
+    t0 = Time.now
+    resp, data = getUrl(myLink)
+    t1 = Time.now-t0
+    tdl+=t1
+    tsize+=data.length
+    if resp.code != "200"
+      fileErrorCount+=1
+    end
+    if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{data.length}o) t("+sprintf("%.2f", t1)+"s)" end
   }
 }
 threads.each { |aThread|  aThread.join }
@@ -289,30 +282,30 @@ threads.each { |aThread|  aThread.join }
 ## Get Statistics
 ###############################################################
 tFinish = Time.now
-tTotal=tFinish-tStart
+totalTime=tFinish-tStart
 
-if isDEBUG >= 1
+if DEBUG >= 1
   puts "\n * results"
   puts "Inner links count: #{linksToDl.length}"
   puts "Inner links dl cumulated time: "+sprintf("%.2f", tdl)+"s"
-  puts "Total time: "+sprintf("%.2f", tTotal)+"s"
+  puts "Total time: "+sprintf("%.2f", totalTime)+"s"
   puts "Total size: #{tsize/1000}ko"
   puts "\n"
 end
 
 ## Set exit value
 ###############################################################
-if tTotal < tWARN # Good \o/
+if totalTime < timeWarn # Good \o/
   retCode=0
   retCodeLabel="OK"
-elsif !isEXTENDED && tTotal >= tWARN && tTotal < tCRITICAL # not so good o_o
+elsif !EXTENDED && totalTime >= timeWarn && totalTime < timeCritical # not so good o_o
   retCode=1
   retCodeLabel="Warn"
 ## - Extended mode begin
-elsif isEXTENDED && tTotal >= tWARN && tTotal < tWARN2 # not so good o_o
+elsif EXTENDED && totalTime >= timeWarn && totalTime < timeWarn2 # not so good o_o
   retCode=1
   retCodeLabel="Warn"
-elsif isEXTENDED && tTotal >= tWARN2 && tTotal < tCRITICAL # not so good o_o'
+elsif EXTENDED && totalTime >= timeWarn2 && totalTime < timeCritical # not so good o_o'
   retCode=3
   retCodeLabel="Unknown"
 ## - Extended mode end
@@ -331,5 +324,5 @@ end
 
 ## print the script result for nagios
 ###############################################################
-puts "#{retCodeLabel} - #{tsize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", tTotal)+"s"
+puts "#{retCodeLabel} - #{tsize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
 exit retCode
