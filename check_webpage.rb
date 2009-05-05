@@ -30,9 +30,8 @@
 # Full documentation: http://code.google.com/p/nagios-check-webpage/wiki/Documentation
 
 # TODO
-# - check if threadsafe
+# - check if threadsafe ( totalX+=1 problem )
 # - check if inner links search is exhaustive enough ( uppercase element problem ... )
-# - check Nagios plug-in development guidelines http://nagiosplug.sourceforge.net/developer-guidelines.html
 
 require 'net/http'
 require 'net/https'
