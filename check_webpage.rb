@@ -15,9 +15,25 @@
 #
 #	Copyright Vincent Reydet
 
-#TODO
+# Project: nagios-check-webpage 
+# Website: http://code.google.com/p/nagios-check-webpage/
+
+# To use in nagios:
+#   - Put the script into the $USER1$ directory
+#   - Add this check command ( add your options ... )
+#     define command{
+#       command_name  check-webpage
+#       command_line  $USER1$/check_webpage.rb -u $ARG1$
+#     }
+
+# Quick documentation: use -h option
+# Full documentation: http://code.google.com/p/nagios-check-webpage/wiki/Documentation
+
+# TODO
 # - check if threadsafe
-# - catch timeout error
+# - check if inner links search is exhaustive enough ( test uppercase )
+# - check Nagios plug-in development guidelines http://nagiosplug.sourceforge.net/developer-guidelines.html
+# - check for handle all possible errors ( catch timeout error ? )
 
 require 'net/http'
 require 'net/https'
@@ -26,7 +42,8 @@ require 'rubygems'
 require 'hpricot'
 require 'optiflag'
 
-#OPT PARSING
+## OPT PARSING
+###############################################################
 module Example extend OptiFlagSet
   usage_flag "h","help"
   optional_switch_flag "v" do
@@ -62,7 +79,7 @@ module Example extend OptiFlagSet
   and_process!
 end 
 
-#VARS
+# GET THE ARGV VALUES
 if ARGV.flags.e?
   isEXTENDED=1
 else
@@ -101,25 +118,32 @@ else
   keyword=nil
 end
 
-
+inputURL=ARGV.flags.u
 requestTimeout=180
 
 if isDEBUG >= 2;puts "\n * ARGS: c=#{tCRITICAL} w=#{tWARN} e=#{isEXTENDED} w2=#{tWARN2} u=#{ARGV.flags.u}";end
 
+## PARSE INPUT URL
+###############################################################
 begin
-  mainUrl = URI.parse(ARGV.flags.u)
+  if inputURL.index("http") != 0
+    inputURL ="http://"+inputURL
+  end
+  mainUrl = URI.parse(inputURL)
 rescue
   puts "Critical: syntax error, can't parse url ..."
-  retCodeLabel="Critical"
   exit 2
 end
 
+## COMPLETE THE INPUT URL
+###############################################################
 if mainUrl.path == "" || mainUrl.path == nil
   mainUrl.path = '/'
 end
 
-## Remove certificate warning
+## Remove ssl certificate warning
 #  http://www.5dollarwhitebox.org/drupal/node/64
+###############################################################
 
 class Net::HTTP
   alias_method :old_initialize, :initialize
@@ -131,6 +155,7 @@ class Net::HTTP
 end
 
 ## PART 1 - get main page and parse it
+###############################################################
 tStart = Time.now
 if isDEBUG >= 1;puts "\n * Get main page: #{mainUrl}";end
 h = Net::HTTP.new( mainUrl.host, mainUrl.port)
@@ -140,16 +165,17 @@ end
 h.read_timeout=requestTimeout
 resp, data = h.get(mainUrl.path, nil)
 
-#handle redirection
-i=0
-while resp.code == "302"
+## handle redirection
+###############################################################
+i=0 #redirect count
+while resp.code == "302" || resp.code == "301"
   begin
     mainUrl = URI.parse(resp['location'])
   rescue
     puts "Critical: can't parse redirected url ..."
     exit 2
   end
-  if isDEBUG >= 1;puts "   -> 302, main page is now: #{mainUrl}";end
+  if isDEBUG >= 1;puts "   -> #{resp.code}, main page is now: #{mainUrl}";end
   h = Net::HTTP.new( mainUrl.host, mainUrl.port)
   if mainUrl.scheme == "https"
     h.use_ssl = true
@@ -163,13 +189,15 @@ while resp.code == "302"
   end
 end
 
-#check return code
+## check main url return code
+###############################################################
 if resp.code != "200"
   puts "Critical: main page rcode is #{resp.code} - #{resp.message}"
   exit 2
 end
 
-#Check for keyword
+## Check for keyword ( -k option )
+###############################################################
 if keyword != nil
   hasKey=0
   data.each { |line|
@@ -183,11 +211,14 @@ if keyword != nil
   end
 end
 
-#Get page size
+## Get main url page size
+###############################################################
 tsize=data.length
 
 if isDEBUG >= 1;puts "[#{resp.code}] #{resp.message} s(#{tsize}) t(#{Time.now-tStart})";end
 
+## Parsing main page data
+###############################################################
 doc = Hpricot(data)
 parsingResult = doc.search("//img[@src]").map { |x| x['src'] }
 parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
@@ -195,8 +226,9 @@ parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] 
 parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
 parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
 
+## Pop the wanted links
+###############################################################
 linksToDl = []
-
 if isDEBUG >= 2;puts "\n * parsing results (#{parsingResult.length}) ...";end
 parsingResult.length.times do |i|
   #change link to full link
@@ -228,7 +260,8 @@ linksToDl.uniq!
 if isDEBUG >= 2;puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}";end
 
 ## PART 2 - DL content links
-tdl=0 #Stat
+###############################################################
+tdl=0 #Stat total download
 fileErrorCount=0
 if isDEBUG >= 1;puts "\n * downloading inner links (#{linksToDl.length}) ...";end
 threads = []
@@ -253,6 +286,8 @@ linksToDl.each {  |link|
 }
 threads.each { |aThread|  aThread.join }
 
+## Get Statistics
+###############################################################
 tFinish = Time.now
 tTotal=tFinish-tStart
 
@@ -265,31 +300,36 @@ if isDEBUG >= 1
   puts "\n"
 end
 
-# set return
-if tTotal < tWARN
+## Set exit value
+###############################################################
+if tTotal < tWARN # Good \o/
   retCode=0
   retCodeLabel="OK"
-elsif !isEXTENDED && tTotal >= tWARN && tTotal < tCRITICAL
+elsif !isEXTENDED && tTotal >= tWARN && tTotal < tCRITICAL # not so good o_o
   retCode=1
   retCodeLabel="Warn"
 ## - Extended mode begin
-elsif isEXTENDED && tTotal >= tWARN && tTotal < tWARN2
+elsif isEXTENDED && tTotal >= tWARN && tTotal < tWARN2 # not so good o_o
   retCode=1
   retCodeLabel="Warn"
-elsif isEXTENDED && tTotal >= tWARN2 && tTotal < tCRITICAL
+elsif isEXTENDED && tTotal >= tWARN2 && tTotal < tCRITICAL # not so good o_o'
   retCode=3
   retCodeLabel="Unknown"
 ## - Extended mode end
-else
+else # bad :(
   retCode=2
   retCodeLabel="Critical"
 end
 
+## show the error file count in output
+###############################################################
 if fileErrorCount > 0
   fileErrorStr="/#{fileErrorCount} err"
 else
   fileErrorStr=""
 end
 
+## print the script result for nagios
+###############################################################
 puts "#{retCodeLabel} - #{tsize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", tTotal)+"s"
 exit retCode
