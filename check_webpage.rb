@@ -31,9 +31,8 @@
 
 # TODO
 # - check if threadsafe
-# - check if inner links search is exhaustive enough ( test uppercase )
+# - check if inner links search is exhaustive enough ( uppercase element problem ... )
 # - check Nagios plug-in development guidelines http://nagiosplug.sourceforge.net/developer-guidelines.html
-# - check for handle all possible errors ( catch timeout error ? )
 
 require 'net/http'
 require 'net/https'
@@ -119,7 +118,8 @@ else
 end
 
 inputURL=ARGV.flags.u
-REQUESTTIMEOUT=180
+REQUESTTIMEOUT=timeCritical
+MAXREDIRECT=5
 
 if DEBUG >= 2: puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -161,7 +161,13 @@ def getUrl( parsedUri )
     _h.use_ssl = true
   end
   _h.read_timeout=REQUESTTIMEOUT
-  return _h.get(parsedUri.path, nil)
+  begin
+    r,d = _h.get(parsedUri.path, nil)
+  rescue Timeout::Error
+    puts "Critical: timeout on [#{parsedUri.path}]"
+    exit 2
+  end
+  return r,d
 end
 
 ## PART 1 - get main page and parse it
@@ -182,9 +188,8 @@ while resp.code == "302" || resp.code == "301"
   end
   if DEBUG >= 1: puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
   resp, data = getUrl(mainUrl)
-  i+=1 #TODO DO BETTER ...
-  if i >= 5
-    if DEBUG >= 1;puts "   -> too much redirect (5), exit";end
+  if (i+=1) >= MAXREDIRECT
+    puts "Critical: too much redirect (#{MAXREDIRECT}), exit"
     exit 2
   end
 end
@@ -268,12 +273,12 @@ threads = []
 linksToDl.each {  |link|
   threads << Thread.new(link) { |myLink|
     t0 = Time.now
-    resp, data = getUrl(myLink)
+    r, d = getUrl(myLink)
     t1 = Time.now-t0
     totalDlTime+=t1
-    totalSize+=data.length
-    if resp.code != "200": fileErrorCount+=1 end
-    if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{data.length}o) t("+sprintf("%.2f", t1)+"s)" end
+    totalSize+=d.length
+    if r.code != "200": fileErrorCount+=1 end
+    if DEBUG >= 1: puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
   }
 }
 threads.each { |aThread|  aThread.join }
