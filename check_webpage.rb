@@ -163,9 +163,10 @@ def getUrl( parsedUri )
   _h.read_timeout=REQUESTTIMEOUT
   return _h.get(parsedUri.path, nil)
 end
+
 ## PART 1 - get main page and parse it
 ###############################################################
-tStart = Time.now
+startedTime = Time.now
 if DEBUG >= 1: puts "\n * Get main page: #{mainUrl}" end
 resp, data = getUrl(mainUrl)
 
@@ -212,9 +213,9 @@ end
 
 ## Get main url page size
 ###############################################################
-tsize=data.length
+totalSize=data.length
 
-if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} s(#{tsize}) t(#{Time.now-tStart})" end
+if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
 
 ## Parsing main page data
 ###############################################################
@@ -260,7 +261,7 @@ if DEBUG >= 2: puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{li
 
 ## PART 2 - DL content links
 ###############################################################
-tdl=0 #Stat total download
+totalDlTime=0 #Stat total download
 fileErrorCount=0
 if DEBUG >= 1: puts "\n * downloading inner links (#{linksToDl.length}) ..." end
 threads = []
@@ -269,11 +270,9 @@ linksToDl.each {  |link|
     t0 = Time.now
     resp, data = getUrl(myLink)
     t1 = Time.now-t0
-    tdl+=t1
-    tsize+=data.length
-    if resp.code != "200"
-      fileErrorCount+=1
-    end
+    totalDlTime+=t1
+    totalSize+=data.length
+    if resp.code != "200": fileErrorCount+=1 end
     if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{data.length}o) t("+sprintf("%.2f", t1)+"s)" end
   }
 }
@@ -281,15 +280,15 @@ threads.each { |aThread|  aThread.join }
 
 ## Get Statistics
 ###############################################################
-tFinish = Time.now
-totalTime=tFinish-tStart
+finishedTime = Time.now
+totalTime=finishedTime-startedTime
 
 if DEBUG >= 1
   puts "\n * results"
   puts "Inner links count: #{linksToDl.length}"
-  puts "Inner links dl cumulated time: "+sprintf("%.2f", tdl)+"s"
+  puts "Inner links dl cumulated time: "+sprintf("%.2f", totalDlTime)+"s"
   puts "Total time: "+sprintf("%.2f", totalTime)+"s"
-  puts "Total size: #{tsize/1000}ko"
+  puts "Total size: #{totalSize/1000}ko"
   puts "\n"
 end
 
@@ -324,5 +323,5 @@ end
 
 ## print the script result for nagios
 ###############################################################
-puts "#{retCodeLabel} - #{tsize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+puts "#{retCodeLabel} - #{totalSize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
 exit retCode
