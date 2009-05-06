@@ -236,6 +236,10 @@ linksToDl = []
 if DEBUG >= 2: puts "\n * parsing results (#{parsingResult.length}) ..." end
 parsingResult.length.times do |i|
   #change link to full link
+  if parsingResult[i]==nil || parsingResult[i]==""
+    if DEBUG >= 2: puts "#{parsingResult[i]} -> pass (empty)" end
+    next
+  end
   if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
     parsingResult[i]="/"+parsingResult[i];
   end
