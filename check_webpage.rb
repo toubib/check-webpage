@@ -33,6 +33,7 @@
 # - check if threadsafe ( totalX+=1 problem )
 # - check if inner links search is exhaustive enough ( uppercase element problem ... )
 
+require 'thread'
 require 'net/http'
 require 'net/https'
 require 'open-uri'
@@ -271,6 +272,7 @@ if DEBUG >= 2: puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{li
 ###############################################################
 totalDlTime=0 #Stat total download
 fileErrorCount=0
+mutex = Mutex.new #set mutex
 if DEBUG >= 1: puts "\n * downloading inner links (#{linksToDl.length}) ..." end
 threads = []
 linksToDl.each {  |link|
@@ -278,8 +280,10 @@ linksToDl.each {  |link|
     t0 = Time.now
     r, d = getUrl(myLink)
     t1 = Time.now-t0
-    totalDlTime+=t1
-    totalSize+=d.length
+    mutex.synchronize do
+      totalDlTime+=t1
+      totalSize+=d.length
+    end
     if r.code != "200": fileErrorCount+=1 end
     if DEBUG >= 1: puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
   }
