@@ -335,5 +335,7 @@ end
 
 ## print the script result for nagios
 ###############################################################
-puts "#{retCodeLabel} - #{totalSize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+print "#{retCodeLabel} - #{totalSize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUESTTIMEOUT} size="+"#{totalSize/1000}"+"KB;;;0;"
+print "\n"
 exit retCode
