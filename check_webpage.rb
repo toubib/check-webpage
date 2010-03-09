@@ -130,6 +130,7 @@ end
 inputURL=ARGV.flags.u
 REQUESTTIMEOUT=timeCritical
 MAXREDIRECT=5
+USERAGENT='nagios-check-webpage'
 
 if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -172,7 +173,7 @@ def getUrl( parsedUri )
   end
   _h.read_timeout=REQUESTTIMEOUT
   begin
-    r,d = _h.get(parsedUri.path)
+    r,d = _h.get(parsedUri.path, {'User-Agent' => USERAGENT})
   rescue Timeout::Error
     puts "Critical: timeout on [#{parsedUri.path}]"
     exit 2
