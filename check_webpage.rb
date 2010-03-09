@@ -54,6 +54,10 @@ module Example extend OptiFlagSet
   optional_switch_flag "e" do
     description "extended mode, see the documentation"
   end
+  optional_switch_flag "H" do
+    long_form "span-hosts"
+    description "--span-hosts, download from other hosts"
+  end
   optional_flag "c" do
     long_form "critical"
     description "--critical, default 60,  Critical time (s)"
@@ -117,6 +121,12 @@ else
   keyword=nil
 end
 
+if ARGV.flags.H?
+  spanHosts=1
+else
+  spanHosts=0
+end
+
 inputURL=ARGV.flags.u
 REQUESTTIMEOUT=timeCritical
 MAXREDIRECT=5
@@ -165,6 +175,9 @@ def getUrl( parsedUri )
     r,d = _h.get(parsedUri.path)
   rescue Timeout::Error
     puts "Critical: timeout on [#{parsedUri.path}]"
+    exit 2
+  rescue
+    puts "Critical: something went bad with [#{parsedUri}]: "+$!.to_s
     exit 2
   end
   return r,d
@@ -251,7 +264,7 @@ parsingResult.length.times do |i|
   begin
     #test if url
     url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
-    if url.host != mainUrl.host
+    if spanHosts == 0 && url.host != mainUrl.host
       if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
       next
     end
