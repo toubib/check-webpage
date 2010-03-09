@@ -121,7 +121,7 @@ inputURL=ARGV.flags.u
 REQUESTTIMEOUT=timeCritical
 MAXREDIRECT=5
 
-if DEBUG >= 2: puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
+if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
 ## PARSE INPUT URL
 ###############################################################
@@ -162,7 +162,7 @@ def getUrl( parsedUri )
   end
   _h.read_timeout=REQUESTTIMEOUT
   begin
-    r,d = _h.get(parsedUri.path, nil)
+    r,d = _h.get(parsedUri.path)
   rescue Timeout::Error
     puts "Critical: timeout on [#{parsedUri.path}]"
     exit 2
@@ -173,7 +173,7 @@ end
 ## PART 1 - get main page and parse it
 ###############################################################
 startedTime = Time.now
-if DEBUG >= 1: puts "\n * Get main page: #{mainUrl}" end
+if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
 resp, data = getUrl(mainUrl)
 
 ## handle redirection
@@ -186,7 +186,7 @@ while resp.code == "302" || resp.code == "301"
     puts "Critical: can't parse redirected url ..."
     exit 2
   end
-  if DEBUG >= 1: puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
+  if DEBUG >= 1 then puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
   resp, data = getUrl(mainUrl)
   if (i+=1) >= MAXREDIRECT
     puts "Critical: too much redirect (#{MAXREDIRECT}), exit"
@@ -220,7 +220,7 @@ end
 ###############################################################
 totalSize=data.length
 
-if DEBUG >= 1: puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
+if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
 
 ## Parsing main page data
 ###############################################################
@@ -234,11 +234,11 @@ parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
 ## Pop the wanted links
 ###############################################################
 linksToDl = []
-if DEBUG >= 2: puts "\n * parsing results (#{parsingResult.length}) ..." end
+if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
 parsingResult.length.times do |i|
   #change link to full link
   if parsingResult[i]==nil || parsingResult[i]==""
-    if DEBUG >= 2: puts "#{parsingResult[i]} -> pass (empty)" end
+    if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
     next
   end
   if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
@@ -252,28 +252,28 @@ parsingResult.length.times do |i|
     #test if url
     url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
     if url.host != mainUrl.host
-      if DEBUG >= 2: puts "#{parsingResult[i]} -> pass" end
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
       next
     end
 
   rescue URI::InvalidURIError
-    if DEBUG >= 2: puts "#{parsingResult[i]} -> error" end
+    if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
     next
   end
-  if DEBUG >= 2: puts "#{parsingResult[i]} -> add" end
+  if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
   linksToDl.push(url)
 end
 
-if DEBUG >= 2: linksToDlPrevCount=linksToDl.length end
+if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
 linksToDl.uniq!
-if DEBUG >= 2: puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
+if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
 
 ## PART 2 - DL content links
 ###############################################################
 totalDlTime=0 #Stat total download
 fileErrorCount=0
 mutex = Mutex.new #set mutex
-if DEBUG >= 1: puts "\n * downloading inner links (#{linksToDl.length}) ..." end
+if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
 threads = []
 linksToDl.each {  |link|
   threads << Thread.new(link) { |myLink|
@@ -284,8 +284,8 @@ linksToDl.each {  |link|
       totalDlTime+=t1
       totalSize+=d.length
     end
-    if r.code != "200": fileErrorCount+=1 end
-    if DEBUG >= 1: puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+    if r.code != "200" then fileErrorCount+=1 end
+    if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
   }
 }
 threads.each { |aThread|  aThread.join }
