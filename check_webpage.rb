@@ -171,6 +171,9 @@ def getUrl( parsedUri )
   if parsedUri.scheme == "https"
     _h.use_ssl = true
   end
+  if parsedUri.path == "" || parsedUri.path == nil
+    parsedUri.path = '/'
+  end
   _h.read_timeout=REQUESTTIMEOUT
   begin
     r,d = _h.get(parsedUri.path, {'User-Agent' => USERAGENT})
