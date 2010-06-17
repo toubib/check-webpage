@@ -296,6 +296,10 @@ linksToDl.each {  |link|
   threads << Thread.new(link) { |myLink|
     t0 = Time.now
     r, d = getUrl(myLink)
+    if d == nil then
+        # Happens when '204 no content' occurs
+        d = ''
+    end
     t1 = Time.now-t0
     mutex.synchronize do
       totalDlTime+=t1
@@ -326,14 +330,14 @@ end
 if totalTime < timeWarn # Good \o/
   retCode=0
   retCodeLabel="OK"
-elsif !EXTENDED && totalTime >= timeWarn && totalTime < timeCritical # not so good o_o
+elsif EXTENDED == 0 && totalTime >= timeWarn && totalTime < timeCritical # not so good o_o
   retCode=1
   retCodeLabel="Warn"
 ## - Extended mode begin
-elsif EXTENDED && totalTime >= timeWarn && totalTime < timeWarn2 # not so good o_o
+elsif EXTENDED == 1 && totalTime >= timeWarn && totalTime < timeWarn2 # not so good o_o
   retCode=1
   retCodeLabel="Warn"
-elsif EXTENDED && totalTime >= timeWarn2 && totalTime < timeCritical # not so good o_o'
+elsif EXTENDED == 1 && totalTime >= timeWarn2 && totalTime < timeCritical # not so good o_o'
   retCode=3
   retCodeLabel="Unknown"
 ## - Extended mode end
