@@ -84,6 +84,10 @@ module Example extend OptiFlagSet
     long_form "gzip"
     description "--gzip, add gzip,deflate to http headers"
   end
+  optional_switch_flag "n" do
+    long_form "no-inner-links"
+    description "--no-inner-links, do not dl inner links, get only the html"
+  end
   flag "u" do
     long_form "url"
     description "--url, absolute: [http://www.google.com]"
@@ -138,6 +142,12 @@ else
   gzip=0
 end
 
+if ARGV.flags.n?
+  getInnerLinks=0
+else
+  getInnerLinks=1
+end
+
 if ARGV.flags.H?
   spanHosts=1
 else
@@ -146,6 +156,11 @@ end
 
 inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
+
+#inner links var init
+linksToDl = []
+totalDlTime=0 #Stat total download
+fileErrorCount=0
 
 if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -261,77 +276,78 @@ end
 
 if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
 
-## Parsing main page data
+## inner links part
 ###############################################################
-doc = Hpricot(data)
-parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
-parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
-parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
-parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
-parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
+if getInnerLinks == 1
+  ## Parsing main page data
+  ###############################################################
+  doc = Hpricot(data)
+  parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
+  parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
 
-## Pop the wanted links
-###############################################################
-linksToDl = []
-if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
-parsingResult.length.times do |i|
-  #change link to full link
-  if parsingResult[i]==nil || parsingResult[i]==""
-    if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
-    next
-  end
-  if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
-    parsingResult[i]="/"+parsingResult[i];
-  end
-  if parsingResult[i][0,4] != "http"
-   parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
-  end
-
-  begin
-    #test if url
-    url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
-    if spanHosts == 0 && url.host != mainUrl.host
-      if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
+  ## Pop the wanted links
+  ###############################################################
+  if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
+  parsingResult.length.times do |i|
+    #change link to full link
+    if parsingResult[i]==nil || parsingResult[i]==""
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
       next
     end
+    if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
+      parsingResult[i]="/"+parsingResult[i];
+    end
+    if parsingResult[i][0,4] != "http"
+      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
+    end
 
-  rescue URI::InvalidURIError
-    if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
-    next
+    begin
+      #test if url
+      url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
+      if spanHosts == 0 && url.host != mainUrl.host
+        if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
+        next
+      end
+
+    rescue URI::InvalidURIError
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
+      next
+    end
+    if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
+    linksToDl.push(url)
   end
-  if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
-  linksToDl.push(url)
-end
 
-if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
-linksToDl.uniq!
-if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
+  if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
+  linksToDl.uniq!
+  if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
 
-## PART 2 - DL content links
-###############################################################
-totalDlTime=0 #Stat total download
-fileErrorCount=0
-mutex = Mutex.new #set mutex
-if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
-threads = []
-linksToDl.each {  |link|
-  threads << Thread.new(link) { |myLink|
-    t0 = Time.now
-    r, d = getUrl(myLink, httpHeaders)
-    if d == nil then
+  ## PART 2 - DL content links
+  ###############################################################
+  mutex = Mutex.new #set mutex
+  if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
+  threads = []
+  linksToDl.each {  |link|
+    threads << Thread.new(link) { |myLink|
+      t0 = Time.now
+      r, d = getUrl(myLink, httpHeaders)
+      if d == nil then
         # Happens when '204 no content' occurs
         d = ''
-    end
-    t1 = Time.now-t0
-    mutex.synchronize do
-      totalDlTime+=t1
-      totalSize+=d.length
-    end
-    if r.code != "200" then fileErrorCount+=1 end
-    if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      end
+      t1 = Time.now-t0
+      mutex.synchronize do
+        totalDlTime+=t1
+        totalSize+=d.length
+      end
+      if r.code != "200" then fileErrorCount+=1 end
+      if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+    }
   }
-}
-threads.each { |aThread|  aThread.join }
+  threads.each { |aThread|  aThread.join }
+end
 
 ## Get Statistics
 ###############################################################
