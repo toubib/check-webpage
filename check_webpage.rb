@@ -40,6 +40,12 @@ require 'open-uri'
 require 'rubygems'
 require 'hpricot'
 require 'optiflag'
+require 'zlib'
+
+MAX_REDIRECT=5
+
+httpHeaders = Hash.new
+httpHeaders = { 'User-Agent' => 'nagios-check-webpage' }
 
 ## OPT PARSING
 ###############################################################
@@ -73,6 +79,10 @@ module Example extend OptiFlagSet
   optional_flag "k" do
     long_form "key"
     description "--key, check for keyword"
+  end
+  optional_switch_flag "z" do
+    long_form "gzip"
+    description "--gzip, add gzip,deflate to http headers"
   end
   flag "u" do
     long_form "url"
@@ -121,6 +131,13 @@ else
   keyword=nil
 end
 
+if ARGV.flags.z?
+  gzip=1
+  httpHeaders['Accept-Encoding'] = "gzip,deflate"
+else
+  gzip=0
+end
+
 if ARGV.flags.H?
   spanHosts=1
 else
@@ -128,9 +145,7 @@ else
 end
 
 inputURL=ARGV.flags.u
-REQUESTTIMEOUT=timeCritical
-MAXREDIRECT=5
-USERAGENT='nagios-check-webpage'
+REQUEST_TIMEOUT=timeCritical
 
 if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -166,7 +181,7 @@ end
 
 ## get url function
 ###############################################################
-def getUrl( parsedUri )
+def getUrl( parsedUri, httpHeaders )
   _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
   if parsedUri.scheme == "https"
     _h.use_ssl = true
@@ -174,9 +189,9 @@ def getUrl( parsedUri )
   if parsedUri.path == "" || parsedUri.path == nil
     parsedUri.path = '/'
   end
-  _h.read_timeout=REQUESTTIMEOUT
+  _h.read_timeout=REQUEST_TIMEOUT
   begin
-    r,d = _h.get(parsedUri.path, {'User-Agent' => USERAGENT})
+    r,d = _h.get(parsedUri.path, httpHeaders)
   rescue Timeout::Error
     puts "Critical: timeout on [#{parsedUri.path}]"
     exit 2
@@ -184,6 +199,7 @@ def getUrl( parsedUri )
     puts "Critical: something went bad with [#{parsedUri}]: "+$!.to_s
     exit 2
   end
+
   return r,d
 end
 
@@ -191,9 +207,9 @@ end
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
-resp, data = getUrl(mainUrl)
+resp, data = getUrl(mainUrl, httpHeaders)
 
-## handle redirection
+## handle redirectiol
 ###############################################################
 i=0 #redirect count
 while resp.code == "302" || resp.code == "301"
@@ -204,9 +220,9 @@ while resp.code == "302" || resp.code == "301"
     exit 2
   end
   if DEBUG >= 1 then puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
-  resp, data = getUrl(mainUrl)
-  if (i+=1) >= MAXREDIRECT
-    puts "Critical: too much redirect (#{MAXREDIRECT}), exit"
+  resp, data = getUrl(mainUrl, httpHeaders)
+  if (i+=1) >= MAX_REDIRECT
+    puts "Critical: too much redirect (#{MAX_REDIRECT}), exit"
     exit 2
   end
 end
@@ -216,6 +232,16 @@ end
 if resp.code != "200"
   puts "Critical: main page rcode is #{resp.code} - #{resp.message}"
   exit 2
+end
+
+## Get main url page size
+###############################################################
+totalSize=data.length
+
+## inflate if gzip is on
+###############################################################
+if gzip == 1 && resp['Content-Encoding'] == 'gzip'
+  data = Zlib::GzipReader.new(StringIO.new(data)).read
 end
 
 ## Check for keyword ( -k option )
@@ -232,10 +258,6 @@ if keyword != nil
     exit 2
   end
 end
-
-## Get main url page size
-###############################################################
-totalSize=data.length
 
 if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
 
@@ -295,7 +317,7 @@ threads = []
 linksToDl.each {  |link|
   threads << Thread.new(link) { |myLink|
     t0 = Time.now
-    r, d = getUrl(myLink)
+    r, d = getUrl(myLink, httpHeaders)
     if d == nil then
         # Happens when '204 no content' occurs
         d = ''
@@ -357,6 +379,6 @@ end
 ## print the script result for nagios
 ###############################################################
 print "#{retCodeLabel} - #{totalSize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
-print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUESTTIMEOUT} size="+"#{totalSize/1000}"+"KB;;;0;"
+print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUEST_TIMEOUT} size="+"#{totalSize/1000}"+"KB;;;0;"
 print "\n"
 exit retCode
