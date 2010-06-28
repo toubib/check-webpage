@@ -213,7 +213,7 @@ def getUrl( parsedUri, httpHeaders )
     puts "Critical: timeout on [#{parsedUri.path}]"
     exit 2
   rescue
-    puts "Critical: something went bad with [#{parsedUri}]: "+$!.to_s
+    puts "Critical: error with [#{parsedUri}]: "+$!.to_s
     exit 2
   end
 
@@ -258,7 +258,12 @@ reports['totalSize'] = data.length
 ## inflate if gzip is on
 ###############################################################
 if gzip == 1 && resp['Content-Encoding'] == 'gzip'
-  data = Zlib::GzipReader.new(StringIO.new(data)).read
+  begin
+    data = Zlib::GzipReader.new(StringIO.new(data)).read
+  rescue Zlib::GzipFile::Error, Zlib::Error
+    puts "Critical: error while inflating gziped url '#{mainUrl}': "+$!.to_s
+    exit 2
+  end
 end
 
 ## Check for keyword ( -k option )
