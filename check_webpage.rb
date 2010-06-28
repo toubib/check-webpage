@@ -42,8 +42,9 @@ require 'hpricot'
 require 'optiflag'
 require 'zlib'
 
-MAX_REDIRECT=5
+MAX_REDIRECT=5 #set max redirect to prevent infinite loop
 
+#set http headers
 httpHeaders = Hash.new
 httpHeaders = { 'User-Agent' => 'nagios-check-webpage' }
 
@@ -143,26 +144,26 @@ else
 end
 
 if ARGV.flags.n?
-  getInnerLinks=0
+  GET_INNER_LINKS = 0
 else
-  getInnerLinks=1
+  GET_INNER_LINKS = 1
 end
 
 if ARGV.flags.H?
-  spanHosts=1
+  SPAN_HOSTS=1
 else
-  spanHosts=0
+  SPAN_HOSTS=0
 end
 
 inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
 
-#inner links var init
+#reports hashtable init
 reports = {}
 reports['totalDlTime'] = 0 #Stat total download
-reports['totalSize'] = 0
-reports['fileErrorCount'] = 0
-reports['linksToDlCount'] = 0
+reports['totalSize'] = 0 #Stat total size
+reports['fileErrorCount'] = 0 #error count
+reports['linksToDlCount'] = 0 #links count
 
 if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -220,7 +221,79 @@ def getUrl( parsedUri, httpHeaders )
   return r,d
 end
 
-## PART 1 - get main page and parse it
+## get inner links function
+###############################################################
+def getInnerLinks (mainUrl, data, httpHeaders, reports)
+
+  ## Parsing main page data
+  doc = Hpricot(data)
+  parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
+  parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
+  parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
+
+  ## Pop the wanted links
+  if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
+  linksToDl = []
+  parsingResult.length.times do |i|
+    #change link to full link
+    if parsingResult[i]==nil || parsingResult[i]==""
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
+      next
+    end
+    if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
+      parsingResult[i]="/"+parsingResult[i];
+    end
+    if parsingResult[i][0,4] != "http"
+      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
+    end
+
+    begin
+      #test if url
+      url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
+      if SPAN_HOSTS == 0 && url.host != mainUrl.host
+        if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
+        next
+      end
+    rescue URI::InvalidURIError
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
+      next
+    end
+    if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
+    linksToDl.push(url)
+  end
+
+  if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
+  linksToDl.uniq!
+  reports['linksToDlCount'] = linksToDl.length
+  if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
+
+  ## DL content links with threads
+  mutex = Mutex.new #set mutex
+  if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
+  threads = []
+  linksToDl.each {  |link|
+    threads << Thread.new(link) { |myLink|
+      t0 = Time.now
+      r, d = getUrl(myLink, httpHeaders)
+      if d == nil then
+        # Happens when '204 no content' occurs
+        d = ''
+      end
+      t1 = Time.now-t0
+      mutex.synchronize do
+        reports['totalDlTime'] += t1
+        reports['totalSize'] += d.length
+      end
+      if r.code != "200" then reports['fileErrorCount'] += 1 end
+      if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+    }
+  }
+  threads.each { |aThread|  aThread.join }
+end
+
+## get main page and parse it
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
@@ -285,78 +358,7 @@ if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{reports['totalSize']
 
 ## inner links part
 ###############################################################
-if getInnerLinks == 1
-  ## Parsing main page data
-  ###############################################################
-  doc = Hpricot(data)
-  parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
-  parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
-
-  ## Pop the wanted links
-  ###############################################################
-  if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
-  linksToDl = []
-  parsingResult.length.times do |i|
-    #change link to full link
-    if parsingResult[i]==nil || parsingResult[i]==""
-      if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
-      next
-    end
-    if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
-      parsingResult[i]="/"+parsingResult[i];
-    end
-    if parsingResult[i][0,4] != "http"
-      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
-    end
-
-    begin
-      #test if url
-      url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
-      if spanHosts == 0 && url.host != mainUrl.host
-        if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
-        next
-      end
-
-    rescue URI::InvalidURIError
-      if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
-      next
-    end
-    if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
-    linksToDl.push(url)
-  end
-
-  if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
-  linksToDl.uniq!
-  reports['linksToDlCount'] = linksToDl.length
-  if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
-
-  ## PART 2 - DL content links
-  ###############################################################
-  mutex = Mutex.new #set mutex
-  if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
-  threads = []
-  linksToDl.each {  |link|
-    threads << Thread.new(link) { |myLink|
-      t0 = Time.now
-      r, d = getUrl(myLink, httpHeaders)
-      if d == nil then
-        # Happens when '204 no content' occurs
-        d = ''
-      end
-      t1 = Time.now-t0
-      mutex.synchronize do
-        reports['totalDlTime'] += t1
-        reports['totalSize'] += d.length
-      end
-      if r.code != "200" then reports['fileErrorCount'] += 1 end
-      if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
-    }
-  }
-  threads.each { |aThread|  aThread.join }
-end
+getInnerLinks(mainUrl, data, httpHeaders, reports) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
@@ -403,7 +405,7 @@ end
 
 ## print the script result for nagios
 ###############################################################
-print "#{retCodeLabel} - #{reports['totalSize']/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+print "#{retCodeLabel} - #{reports['totalSize']/1000}ko, #{reports['linksToDlCount']+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
 print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUEST_TIMEOUT} size="+"#{reports['totalSize']/1000}"+"KB;;;0;"
 print "\n"
 exit retCode
