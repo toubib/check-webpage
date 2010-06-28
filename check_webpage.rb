@@ -158,9 +158,11 @@ inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
 
 #inner links var init
-linksToDl = []
-totalDlTime=0 #Stat total download
-fileErrorCount=0
+reports = {}
+reports['totalDlTime'] = 0 #Stat total download
+reports['totalSize'] = 0
+reports['fileErrorCount'] = 0
+reports['linksToDlCount'] = 0
 
 if DEBUG >= 2 then puts "\n * ARGS: c=#{timeCritical} w=#{timeWarn} e=#{EXTENDED} w2=#{timeWarn2} u=#{ARGV.flags.u}" end
 
@@ -251,7 +253,7 @@ end
 
 ## Get main url page size
 ###############################################################
-totalSize=data.length
+reports['totalSize'] = data.length
 
 ## inflate if gzip is on
 ###############################################################
@@ -274,7 +276,7 @@ if keyword != nil
   end
 end
 
-if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{totalSize}) t(#{Time.now-startedTime})" end
+if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
 
 ## inner links part
 ###############################################################
@@ -291,6 +293,7 @@ if getInnerLinks == 1
   ## Pop the wanted links
   ###############################################################
   if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
+  linksToDl = []
   parsingResult.length.times do |i|
     #change link to full link
     if parsingResult[i]==nil || parsingResult[i]==""
@@ -322,6 +325,7 @@ if getInnerLinks == 1
 
   if DEBUG >= 2 then linksToDlPrevCount=linksToDl.length end
   linksToDl.uniq!
+  reports['linksToDlCount'] = linksToDl.length
   if DEBUG >= 2 then puts "\n * remove duplicated links: #{linksToDlPrevCount} -> #{linksToDl.length}" end
 
   ## PART 2 - DL content links
@@ -339,10 +343,10 @@ if getInnerLinks == 1
       end
       t1 = Time.now-t0
       mutex.synchronize do
-        totalDlTime+=t1
-        totalSize+=d.length
+        reports['totalDlTime'] += t1
+        reports['totalSize'] += d.length
       end
-      if r.code != "200" then fileErrorCount+=1 end
+      if r.code != "200" then reports['fileErrorCount'] += 1 end
       if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
@@ -356,10 +360,10 @@ totalTime=finishedTime-startedTime
 
 if DEBUG >= 1
   puts "\n * results"
-  puts "Inner links count: #{linksToDl.length}"
-  puts "Inner links dl cumulated time: "+sprintf("%.2f", totalDlTime)+"s"
+  puts "Inner links count: #{reports['linksToDlCount']}"
+  puts "Inner links dl cumulated time: "+sprintf("%.2f", reports['totalDlTime']) + "s"
   puts "Total time: "+sprintf("%.2f", totalTime)+"s"
-  puts "Total size: #{totalSize/1000}ko"
+  puts "Total size: #{reports['totalSize']/1000}ko"
   puts "\n"
 end
 
@@ -386,15 +390,15 @@ end
 
 ## show the error file count in output
 ###############################################################
-if fileErrorCount > 0
-  fileErrorStr="/#{fileErrorCount} err"
+if reports['fileErrorCount'] > 0
+  fileErrorStr="/#{reports['fileErrorCount']} err"
 else
   fileErrorStr=""
 end
 
 ## print the script result for nagios
 ###############################################################
-print "#{retCodeLabel} - #{totalSize/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
-print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUEST_TIMEOUT} size="+"#{totalSize/1000}"+"KB;;;0;"
+print "#{retCodeLabel} - #{reports['totalSize']/1000}ko, #{linksToDl.length+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+print "|time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0.00;#{REQUEST_TIMEOUT} size="+"#{reports['totalSize']/1000}"+"KB;;;0;"
 print "\n"
 exit retCode
