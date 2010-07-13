@@ -208,10 +208,21 @@ def getUrl( parsedUri, httpHeaders )
     parsedUri.path = '/'
   end
   _h.read_timeout=REQUEST_TIMEOUT
+
+  if DEBUG >= 2
+  then
+    printf " * \nRequest:\n%s\nPath:%s\nHTTP headers:%s\n",_h.to_yaml,parsedUri.to_yaml,httpHeaders.to_yaml
+  end
+
   begin
-    r,d = _h.get(parsedUri.path, httpHeaders)
+    if parsedUri.query.nil?
+      path = parsedUri.path
+    else
+      path = parsedUri.path + '?' + parsedUri.query
+    end
+    r,d = _h.get(path, httpHeaders)
   rescue Timeout::Error
-    puts "Critical: timeout on [#{parsedUri.path}]"
+    puts "Critical: timeout #{REQUEST_TIMEOUT}s on [#{parsedUri.path}]"
     exit 2
   rescue
     puts "Critical: error with [#{parsedUri}]: "+$!.to_s
@@ -276,18 +287,18 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports)
   linksToDl.each {  |link|
     threads << Thread.new(link) { |myLink|
       t0 = Time.now
-      r, d = getUrl(myLink, httpHeaders)
-      if d == nil then
+      rhead, rbody = getUrl(myLink, httpHeaders)
+      if rbody == nil then
         # Happens when '204 no content' occurs
-        d = ''
+        rbody = ''
       end
       t1 = Time.now-t0
       mutex.synchronize do
         reports['totalDlTime'] += t1
-        reports['totalSize'] += d.length
+        reports['totalSize'] += rbody.length
       end
-      if r.code != "200" then reports['fileErrorCount'] += 1 end
-      if DEBUG >= 1 then puts "[#{r.code}] #{r.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if rhead.code != "200" then reports['fileErrorCount'] += 1 end
+      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
   threads.each { |aThread|  aThread.join }
@@ -297,20 +308,26 @@ end
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
-resp, data = getUrl(mainUrl, httpHeaders)
+rhead,rbody = getUrl(mainUrl, httpHeaders)
+
+# DEBUG headers
+if DEBUG >= 2
+then 
+  printf "\n * response header\n%s",rhead.to_yaml
+end
 
 ## handle redirectiol
 ###############################################################
 i=0 #redirect count
-while resp.code == "302" || resp.code == "301"
+while rhead.code == "302" || rhead.code == "301"
   begin
-    mainUrl = URI.parse(resp['location'])
+    mainUrl = URI.parse(rhead['location'])
   rescue
     puts "Critical: can't parse redirected url ..."
     exit 2
   end
-  if DEBUG >= 1 then puts "   -> #{resp.code}, main page is now: #{mainUrl}" end
-  resp, data = getUrl(mainUrl, httpHeaders)
+  if DEBUG >= 1 then puts "   -> #{rhead.code}, main page is now: #{mainUrl}" end
+  rhead, rbody = getUrl(mainUrl, httpHeaders)
   if (i+=1) >= MAX_REDIRECT
     puts "Critical: too much redirect (#{MAX_REDIRECT}), exit"
     exit 2
@@ -319,20 +336,20 @@ end
 
 ## check main url return code
 ###############################################################
-if resp.code != "200"
-  puts "Critical: main page rcode is #{resp.code} - #{resp.message}"
+if rhead.code != "200"
+  puts "Critical: main page rcode is #{rhead.code} - #{rhead.message}"
   exit 2
 end
 
 ## Get main url page size
 ###############################################################
-reports['totalSize'] = data.length
+reports['totalSize'] = rbody.length
 
 ## inflate if gzip is on
 ###############################################################
-if gzip == 1 && resp['Content-Encoding'] == 'gzip'
+if gzip == 1 && rhead['Content-Encoding'] == 'gzip'
   begin
-    data = Zlib::GzipReader.new(StringIO.new(data)).read
+    rbody = Zlib::GzipReader.new(StringIO.new(rbody)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
     puts "Critical: error while inflating gziped url '#{mainUrl}': "+$!.to_s
     exit 2
@@ -343,7 +360,7 @@ end
 ###############################################################
 if keyword != nil
   hasKey=0
-  data.each { |line|
+  rbody.each { |line|
     if line =~ /#{keyword}/
       hasKey=1
     end
@@ -354,11 +371,11 @@ if keyword != nil
   end
 end
 
-if DEBUG >= 1 then puts "[#{resp.code}] #{resp.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
+if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
 
 ## inner links part
 ###############################################################
-getInnerLinks(mainUrl, data, httpHeaders, reports) unless GET_INNER_LINKS == 0
+getInnerLinks(mainUrl, rbody, httpHeaders, reports) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
