@@ -297,8 +297,8 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports)
         reports['totalDlTime'] += t1
         reports['totalSize'] += rbody.length
       end
-      if rhead.code != "200" then reports['fileErrorCount'] += 1 end
-      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{d.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if rhead.code =~ /[^2]../ then reports['fileErrorCount'] += 1 end
+      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
   threads.each { |aThread|  aThread.join }
@@ -319,7 +319,7 @@ end
 ## handle redirectiol
 ###############################################################
 i=0 #redirect count
-while rhead.code == "302" || rhead.code == "301"
+while rhead.code =~ /3../
   begin
     mainUrl = URI.parse(rhead['location'])
   rescue
@@ -336,7 +336,7 @@ end
 
 ## check main url return code
 ###############################################################
-if rhead.code != "200"
+if rhead.code =~ /[^2]../
   puts "Critical: main page rcode is #{rhead.code} - #{rhead.message}"
   exit 2
 end
