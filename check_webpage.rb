@@ -41,6 +41,7 @@ require 'rubygems'
 require 'hpricot'
 require 'optiflag'
 require 'zlib'
+require 'base64'
 
 MAX_REDIRECT=5 #set max redirect to prevent infinite loop
 
@@ -89,6 +90,14 @@ module Example extend OptiFlagSet
     long_form "no-inner-links"
     description "--no-inner-links, do not dl inner links, get only the html"
   end
+  optional_flag "a" do
+    long_form "auth"
+    description "--auth user:password"
+  end
+  optional_flag "p" do
+    long_form "post"
+    description "--post param=data, use post request with data for the main page"
+  end
   flag "u" do
     long_form "url"
     description "--url, absolute: [http://www.google.com]"
@@ -134,6 +143,16 @@ if ARGV.flags.k?
   keyword=ARGV.flags.k
 else
   keyword=nil
+end
+
+if ARGV.flags.a?
+  httpHeaders['Authorization'] = 'Basic '+Base64.encode64(ARGV.flags.a)
+end
+
+if ARGV.flags.p?
+  postData = ARGV.flags.p
+else
+  postData = nil
 end
 
 if ARGV.flags.z?
@@ -199,7 +218,7 @@ end
 
 ## get url function
 ###############################################################
-def getUrl( parsedUri, httpHeaders )
+def getUrl( parsedUri, httpHeaders, postData = nil )
   _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
   if parsedUri.scheme == "https"
     _h.use_ssl = true
@@ -220,7 +239,11 @@ def getUrl( parsedUri, httpHeaders )
     else
       path = parsedUri.path + '?' + parsedUri.query
     end
-    r,d = _h.get(path, httpHeaders)
+    if postData != nil
+      r,d = _h.post(path, postData, httpHeaders)
+    else
+      r,d = _h.get(path, httpHeaders)
+    end
   rescue Timeout::Error
     puts "Critical: timeout #{REQUEST_TIMEOUT}s on [#{parsedUri.path}]"
     exit 2
@@ -308,7 +331,7 @@ end
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
-rhead,rbody = getUrl(mainUrl, httpHeaders)
+rhead,rbody = getUrl(mainUrl, httpHeaders, postData)
 
 # DEBUG headers
 if DEBUG >= 2
