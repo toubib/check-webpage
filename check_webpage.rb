@@ -230,7 +230,7 @@ def getUrl( parsedUri, httpHeaders, postData = nil )
 
   if DEBUG >= 2
   then
-    printf " * \nRequest:\n%s\nPath:%s\nHTTP headers:%s\n",_h.to_yaml,parsedUri.to_yaml,httpHeaders.to_yaml
+    printf " * Path:%s\nHTTP headers:%s\n", parsedUri, httpHeaders
   end
 
   begin
@@ -333,18 +333,16 @@ startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
 rhead,rbody = getUrl(mainUrl, httpHeaders, postData)
 
-# DEBUG headers
-if DEBUG >= 2
-then 
-  printf "\n * response header\n%s",rhead.to_yaml
-end
-
 ## handle redirectiol
 ###############################################################
 i=0 #redirect count
 while rhead.code =~ /3../
+  lastHost = mainUrl.host #issue 7
   begin
     mainUrl = URI.parse(rhead['location'])
+	if mainUrl.host.nil?
+	  mainUrl.host = lastHost #issue 7
+    end
   rescue
     puts "Critical: can't parse redirected url ..."
     exit 2
