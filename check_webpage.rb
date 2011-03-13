@@ -381,7 +381,7 @@ end
 ###############################################################
 if keyword != nil
   hasKey=0
-  rbody.each { |line|
+  rbody.each_line { |line|
     if line =~ /#{keyword}/
       hasKey=1
     end

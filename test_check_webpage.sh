@@ -37,6 +37,7 @@ function check_if_ERR {
 
 echo
 check_if_OK "-u http://google.com"
+check_if_OK "-u http://google.com -vv"
 check_if_OK "-u http://google.com -k google"
 check_if_OK "-u http://google.com -k google -z"
 check_if_OK "-u http://google.com -k google -z -n"
