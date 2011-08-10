@@ -102,6 +102,18 @@ module Example extend OptiFlagSet
     long_form "url"
     description "--url, absolute: [http://www.google.com]"
   end
+  optional_flag "P" do
+    long_form "proxy"
+    description "--proxy, proxy address host[:port]"
+  end
+  optional_flag "Pu" do
+    long_form "proxy-user"
+    description "--proxy-user, proxy username"
+  end
+  optional_flag "Pp" do
+    long_form "proxy-pass"
+    description "--proxy-pass, proxy password"
+  end
 
   and_process!
 end 
@@ -153,6 +165,16 @@ if ARGV.flags.p?
   postData = ARGV.flags.p
 else
   postData = nil
+end
+
+if ARGV.flags.P?
+  proxy = {}
+  proxy['host'] = ARGV.flags.P.split(':')[0]
+  proxy['port'] = ARGV.flags.P.split(':')[1]
+  proxy['user'] = ARGV.flags.Pu if ARGV.flags.Pu?
+  proxy['pass'] = ARGV.flags.Pp if ARGV.flags.Pp?
+else
+  proxy = { 'host'=>nil, 'port'=>nil, 'user'=>nil, 'pass'=>nil }
 end
 
 if ARGV.flags.z?
@@ -218,8 +240,14 @@ end
 
 ## get url function
 ###############################################################
-def getUrl( parsedUri, httpHeaders, postData = nil )
-  _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
+def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
+#  _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
+  begin
+    _h = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass']).start( parsedUri.host, parsedUri.port)
+  rescue
+    puts "Critical: error with [#{parsedUri}]: "+$!.to_s
+	exit 2
+  end
   if parsedUri.scheme == "https"
     _h.use_ssl = true
   end
@@ -257,7 +285,7 @@ end
 
 ## get inner links function
 ###############################################################
-def getInnerLinks (mainUrl, data, httpHeaders, reports)
+def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
 
   ## Parsing main page data
   doc = Hpricot(data)
@@ -310,7 +338,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports)
   linksToDl.each {  |link|
     threads << Thread.new(link) { |myLink|
       t0 = Time.now
-      rhead, rbody = getUrl(myLink, httpHeaders)
+      rhead, rbody = getUrl(myLink, httpHeaders, proxy)
       if rbody == nil then
         # Happens when '204 no content' occurs
         rbody = ''
@@ -331,7 +359,7 @@ end
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
-rhead,rbody = getUrl(mainUrl, httpHeaders, postData)
+rhead,rbody = getUrl(mainUrl, httpHeaders, proxy, postData)
 
 ## handle redirectiol
 ###############################################################
@@ -348,7 +376,7 @@ while rhead.code =~ /3../
     exit 2
   end
   if DEBUG >= 1 then puts "   -> #{rhead.code}, main page is now: #{mainUrl}" end
-  rhead, rbody = getUrl(mainUrl, httpHeaders)
+  rhead, rbody = getUrl(mainUrl, httpHeaders, proxy)
   if (i+=1) >= MAX_REDIRECT
     puts "Critical: too much redirect (#{MAX_REDIRECT}), exit"
     exit 2
@@ -396,7 +424,7 @@ if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} s(#{reports['totalSize
 
 ## inner links part
 ###############################################################
-getInnerLinks(mainUrl, rbody, httpHeaders, reports) unless GET_INNER_LINKS == 0
+getInnerLinks(mainUrl, rbody, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
