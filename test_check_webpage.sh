@@ -1,10 +1,14 @@
 #!/bin/bash
 #
-# This script use rvm - http://beginrescueend.com
+# This script use:
+#   rvm - http://beginrescueend.com
+#   netcat
 #
-#TODO need a lot of more test !
 
 RVM_VERSIONS="1.8.7 1.9.2"
+PROXY_ADDRESS=192.168.0.202
+PROXY_PORT=3128
+PROXY_USE=0
 
 green="\\033[1;32m"
 red="\033[1;31m"
@@ -45,8 +49,16 @@ function check_if_ERR {
   fi
 }
 
+# CHECK COMMANDS
 which rvm &>/dev/null || die "rvm not found"
+which netcat &>/dev/null || die "netcat not found"
 
+# TEST IF PROXY EXIST
+echo "test proxy server"
+netcat -v -w 1 $PROXY_ADDRESS -z $PROXY_PORT && PROXY_USE=1
+echo
+
+# LAUNCH TEST FOR EACH RUBY VERSION
 for v in $RVM_VERSIONS
 do
 	rvm use $v
@@ -57,6 +69,10 @@ do
 	check_if_OK "-u http://google.com -k google"
 	check_if_OK "-u http://google.com -k google -z"
 	check_if_OK "-u http://google.com -k google -z -n"
+	test $PROXY_USE -eq 1 && check_if_OK "-u http://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
+
+	check_if_OK "-u https://google.com"
+	test $PROXY_USE -eq 1 && check_if_OK "-u https://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
 	
 	echo
 	check_if_ERR "-u http://4dsHfNYD4KRyktGH.com" 
