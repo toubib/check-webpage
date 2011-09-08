@@ -243,20 +243,21 @@ end
 def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
   begin
     _h = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass']).new( parsedUri.host, parsedUri.port)
-    #net_http = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass'])
-    #_h = net_http.new( parsedUri.host, parsedUri.port)
   rescue
     puts "Critical: error with [#{parsedUri}]: "+$!.to_s
     exit 2
   end
+
   if parsedUri.scheme == "https"
     begin
       _h.use_ssl = true
+      _h.verify_mode = OpenSSL::SSL::VERIFY_NONE
     rescue IOError
       puts "Critical: error with [#{parsedUri}]: "+$!.to_s
       exit 2
     end
   end
+
   if parsedUri.path == "" || parsedUri.path == nil
     parsedUri.path = '/'
   end
