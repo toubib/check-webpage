@@ -1,20 +1,20 @@
 check-webpage
 =============
 
-The aim of this nagios plugin is to download a web page with all his content ( internals links only - maybe with option in a futur release ).
+The aim of this nagios compatible check script is to download a web page with all his content.
 
-I used Check [HTTP Requisites plugin](http://www.nagiosexchange.org/cgi-bin/page.cgi?g=Detailed%2F1352.html;d=1) but it's a mono thread way and it's too slow for performance checks.
+I used [Check HTTP Requisites plugin](http://www.nagiosexchange.org/cgi-bin/page.cgi?g=Detailed%2F1352.html;d=1) but it's a mono thread way and it's too slow for performance checks.
 
 Main features
 -------------
 
  * Ruby small script, easy to understand and hack ...
- * http/https
- * Use the powerful and simple hpricot lib to parse html
+ * Use the powerful and simple [hpricot](https://github.com/hpricot/hpricot) lib to parse html
  * Multi-thread
  * Keyword check
  * Follow redirections
  * Download all the links on the page or only the html 
+ * Supported options: gzip deflate, auth, proxy, http post, https
 
 Example
 -------
