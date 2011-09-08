@@ -241,15 +241,21 @@ end
 ## get url function
 ###############################################################
 def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
-#  _h = Net::HTTP.new( parsedUri.host, parsedUri.port)
   begin
-    _h = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass']).start( parsedUri.host, parsedUri.port)
+    _h = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass']).new( parsedUri.host, parsedUri.port)
+    #net_http = Net::HTTP::Proxy( proxy['host'], proxy['port'], proxy['user'], proxy['pass'])
+    #_h = net_http.new( parsedUri.host, parsedUri.port)
   rescue
     puts "Critical: error with [#{parsedUri}]: "+$!.to_s
-	exit 2
+    exit 2
   end
   if parsedUri.scheme == "https"
-    _h.use_ssl = true
+    begin
+      _h.use_ssl = true
+    rescue IOError
+      puts "Critical: error with [#{parsedUri}]: "+$!.to_s
+      exit 2
+    end
   end
   if parsedUri.path == "" || parsedUri.path == nil
     parsedUri.path = '/'
