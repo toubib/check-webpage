@@ -48,5 +48,5 @@ OK - 15ko, 2 files, 0.35s
 Documentation
 -------------
 
-English: https://github.com/Toubib/check-webpage/wiki/Documentation-en
-Français: https://github.com/Toubib/check-webpage/wiki/Documentation-fr
+ * English: https://github.com/Toubib/check-webpage/wiki/Documentation-en
+ * Français: https://github.com/Toubib/check-webpage/wiki/Documentation-fr
