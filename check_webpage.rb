@@ -302,18 +302,28 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
   parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
   parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
 
+  #link_path is path without filename
+  link_path = /.*\//.match(mainUrl.path)[0]
+  if DEBUG >= 2 then puts "\nDEBUG path=#{mainUrl.path}, link_path=#{link_path}" end
+
   ## Pop the wanted links
   if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
   linksToDl = []
+
   parsingResult.length.times do |i|
-    #change link to full link
     if parsingResult[i]==nil || parsingResult[i]==""
       if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass (empty)" end
       next
     end
-    if parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
-      parsingResult[i]= mainUrl.path + parsingResult[i];
+
+    #change link to full link
+    #Fix error if '../' is reqested but we are at root
+    if link_path == "/" && parsingResult[i][0,3] == "../"
+        parsingResult[i] = /\/.*/.match(parsingResult[i])[0]
+    elsif parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
+      parsingResult[i]= link_path + parsingResult[i];
     end
+
     if parsingResult[i][0,4] != "http"
       parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
     end
