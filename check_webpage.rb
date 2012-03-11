@@ -70,6 +70,10 @@ module Example extend OptiFlagSet
     long_form "critical"
     description "--critical, default 60,  Critical time (s)"
   end
+  optional_flag "C" do
+    long_form "cookie"
+    description '--cookie "key=value[;key=value]"'
+  end
   optional_flag "w" do
     long_form "warn"
     description "--warn, default 5,  warn time (s)"
@@ -137,6 +141,10 @@ if ARGV.flags.c?
   timeCritical=ARGV.flags.c.to_f
 else
   timeCritical=60
+end
+
+if ARGV.flags.C?
+  httpHeaders['Cookie'] = ARGV.flags.C
 end
 
 if ARGV.flags.w?
