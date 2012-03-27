@@ -287,6 +287,23 @@ def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
     else
       r,d = _h.get(path, httpHeaders)
     end
+
+	#Get response cookies and set them again
+    r_cookies = r.get_fields('set-cookie')
+
+	if ! r_cookies.nil?
+		cookies_temp_array = Array.new
+		r_cookies.each { | cookie |
+			cookies_temp_array.push(cookie.split('; ')[0])
+		}
+		httpHeaders['Cookie'] = cookies_temp_array.join('; ')
+	end
+
+	if DEBUG >= 2
+	then
+	  printf "COOKIE: %s\n", r_cookies
+	end
+
   rescue Timeout::Error
     puts "Critical: timeout #{REQUEST_TIMEOUT}s on [#{parsedUri.path}]"
     exit 2
