@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-#	
+#
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#	Copyright Vincent Reydet
+#       Copyright Vincent Reydet
 
 # Project: nagios-check-webpage 
 # Website: http://code.google.com/p/nagios-check-webpage/
@@ -255,6 +255,18 @@ def filename_safe(filename)
 end
 
 
+def log_content(url, response, body) 
+  if LOG.nil? then
+    return
+  end
+  logstamp = DateTime.now().strftime('%F:%H:%M:%S')
+  logfile = File.join(LOG, filename_safe(url.to_s) + '-' + logstamp)
+  logfile = File.new(logfile, "w")
+  response.header.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
+  logfile.write("\n#{body}\n")
+end
+
+
 ## get url function
 ###############################################################
 def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
@@ -381,7 +393,10 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
         reports['totalDlTime'] += t1
         reports['totalSize'] += rbody.length
       end
-      if rhead.code =~ /[^2]../ then reports['fileErrorCount'] += 1 end
+      if rhead.code =~ /[^2]../ then
+        reports['fileErrorCount'] += 1
+        log_content(myLink, rhead, rbody)
+      end
       if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
@@ -401,8 +416,8 @@ while rhead.code =~ /3../
   lastHost = mainUrl.host #issue 7
   begin
     mainUrl = URI.parse(rhead['location'])
-	if mainUrl.host.nil?
-	  mainUrl.host = lastHost #issue 7
+        if mainUrl.host.nil?
+          mainUrl.host = lastHost #issue 7
     end
   rescue
     puts "Critical: can't parse redirected url ..."
@@ -420,6 +435,7 @@ end
 ###############################################################
 if rhead.code =~ /[^2]../
   puts "Critical: main page rcode is #{rhead.code} - #{rhead.message}"
+  log_content(mainUrl, rhead, rbody)
   exit 2
 end
 
@@ -433,7 +449,7 @@ if gzip == 1 && rhead['Content-Encoding'] == 'gzip'
   begin
     rbody = Zlib::GzipReader.new(StringIO.new(rbody)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
-    puts "Critical: error while inflating gziped url '#{mainUrl}': "+$!.to_s
+    puts "Critical: error while inflating gzipped url '#{mainUrl}': "+$!.to_s
     exit 2
   end
 end
@@ -449,6 +465,7 @@ if keyword != nil
   }
   if hasKey==0
     puts "Critical: string not found"
+    log_content(mainUrl, rhead, rbody)
     exit 2
   end
 end
@@ -496,12 +513,8 @@ end
 
 ## Store main page content if not OK
 ###############################################################
-if (retCode == 1 || retCode == 2) && !LOG.nil? then
-  logstamp = DateTime.now().strftime('%F:%H:%M:%S')
-  logfile = File.join(LOG, filename_safe(mainUrl.to_s) + '-' + logstamp)
-  logfile = File.new(logfile, "w")
-  rhead.header.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
-  logfile.write("\n#{rbody}\n")
+if retCode > 0 then
+    log_content(mainUrl, rhead, rbody)
 end
 
 ## show the error file count in output
