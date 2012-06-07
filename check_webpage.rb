@@ -42,6 +42,7 @@ require 'hpricot'
 require 'optiflag'
 require 'zlib'
 require 'base64'
+require 'date'
 
 MAX_REDIRECT=5 #set max redirect to prevent infinite loop
 
@@ -113,6 +114,11 @@ module Example extend OptiFlagSet
   optional_flag "Pp" do
     long_form "proxy-pass"
     description "--proxy-pass, proxy password"
+  end
+
+  optional_flag "l" do
+    long_form "log"
+    description "--log, log directory to store output on error"
   end
 
   and_process!
@@ -196,6 +202,12 @@ else
   SPAN_HOSTS=0
 end
 
+if ARGV.flags.l?
+  LOG=ARGV.flags.l
+else
+  LOG=nil
+end
+
 inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
 
@@ -237,6 +249,11 @@ class Net::HTTP
     @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
   end
 end
+
+def filename_safe(filename)
+  filename.tr(" \t\n/", '_')
+end
+
 
 ## get url function
 ###############################################################
@@ -377,7 +394,7 @@ startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
 rhead,rbody = getUrl(mainUrl, httpHeaders, proxy, postData)
 
-## handle redirectiol
+## handle redirection
 ###############################################################
 i=0 #redirect count
 while rhead.code =~ /3../
@@ -475,6 +492,16 @@ elsif EXTENDED == 1 && totalTime >= timeWarn2 && totalTime < timeCritical # not 
 else # bad :(
   retCode=2
   retCodeLabel="Critical"
+end
+
+## Store main page content if not OK
+###############################################################
+if (retCode == 1 || retCode == 2) && !LOG.nil? then
+  logstamp = DateTime.now().strftime('%F:%H:%M:%S')
+  logfile = File.join(LOG, filename_safe(mainUrl.to_s) + '-' + logstamp)
+  logfile = File.new(logfile, "w")
+  rhead.header.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
+  logfile.write("\n#{rbody}\n")
 end
 
 ## show the error file count in output
