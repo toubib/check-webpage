@@ -306,6 +306,12 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
   link_path = /.*\//.match(mainUrl.path)[0]
   if DEBUG >= 2 then puts "\nDEBUG path=#{mainUrl.path}, link_path=#{link_path}" end
 
+  base = doc.search("//base").map { |x| x['href'] }
+  if base.length > 0 then
+    if DEBUG >= 2 then puts "\n * switching main url to base (#{base[0]})" end
+    mainUrl = URI.parse(base[0])
+  end
+
   ## Pop the wanted links
   if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
   linksToDl = []
@@ -316,20 +322,13 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
       next
     end
 
-    #change link to full link
-    #Fix error if '../' is reqested but we are at root
-    if link_path == "/" && parsingResult[i][0,3] == "../"
-        parsingResult[i] = /\/.*/.match(parsingResult[i])[0]
-    elsif parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
-      parsingResult[i]= link_path + parsingResult[i];
-    end
-
+    # Ensure the link is expanded to a URL
     if parsingResult[i][0,4] != "http"
-      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
+      parsingResult[i]= mainUrl.merge(parsingResult[i]).to_s;
     end
 
     begin
-      #test if url
+      # test if url
       url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
       if SPAN_HOSTS == 0 && url.host != mainUrl.host
         if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
@@ -366,7 +365,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
         reports['totalSize'] += rbody.length
       end
       if rhead.code =~ /[^2]../ then reports['fileErrorCount'] += 1 end
-      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
   threads.each { |aThread|  aThread.join }
