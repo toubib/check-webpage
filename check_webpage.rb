@@ -325,7 +325,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
     end
 
     if parsingResult[i][0,4] != "http"
-      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + parsingResult[i]
+      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + ':' + mainUrl.port.to_s + parsingResult[i]
     end
 
     begin
