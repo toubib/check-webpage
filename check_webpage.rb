@@ -1,5 +1,5 @@
 #!/usr/bin/env ruby
-#	
+#
 #   This program is free software: you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
 #   the Free Software Foundation, either version 3 of the License, or
@@ -13,7 +13,7 @@
 #   You should have received a copy of the GNU General Public License
 #   along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
-#	Copyright Vincent Reydet
+#       Copyright Vincent Reydet
 
 # Project: nagios-check-webpage 
 # Website: http://code.google.com/p/nagios-check-webpage/
@@ -42,6 +42,7 @@ require 'hpricot'
 require 'optiflag'
 require 'zlib'
 require 'base64'
+require 'date'
 
 MAX_REDIRECT=5 #set max redirect to prevent infinite loop
 
@@ -113,6 +114,11 @@ module Example extend OptiFlagSet
   optional_flag "Pp" do
     long_form "proxy-pass"
     description "--proxy-pass, proxy password"
+  end
+
+  optional_flag "l" do
+    long_form "log"
+    description "--log, log directory to store output on error"
   end
 
   and_process!
@@ -196,6 +202,12 @@ else
   SPAN_HOSTS=0
 end
 
+if ARGV.flags.l?
+  LOG=ARGV.flags.l
+else
+  LOG=nil
+end
+
 inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
 
@@ -237,6 +249,23 @@ class Net::HTTP
     @ssl_context.verify_mode = OpenSSL::SSL::VERIFY_NONE
   end
 end
+
+def filename_safe(filename)
+  filename.tr(" \t\n/", '_')
+end
+
+
+def log_content(url, response, body) 
+  if LOG.nil? then
+    return
+  end
+  logstamp = DateTime.now().strftime('%F:%H:%M:%S')
+  logfile = File.join(LOG, filename_safe(url.to_s) + '-' + logstamp)
+  logfile = File.new(logfile, "w")
+  response.header.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
+  logfile.write("\n#{body}\n")
+end
+
 
 ## get url function
 ###############################################################
@@ -306,6 +335,12 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
   link_path = /.*\//.match(mainUrl.path)[0]
   if DEBUG >= 2 then puts "\nDEBUG path=#{mainUrl.path}, link_path=#{link_path}" end
 
+  base = doc.search("//base").map { |x| x['href'] }
+  if base.length > 0 then
+    if DEBUG >= 2 then puts "\n * switching main url to base (#{base[0]})" end
+    mainUrl = URI.parse(base[0])
+  end
+
   ## Pop the wanted links
   if DEBUG >= 2 then puts "\n * parsing results (#{parsingResult.length}) ..." end
   linksToDl = []
@@ -316,20 +351,13 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
       next
     end
 
-    #change link to full link
-    #Fix error if '../' is reqested but we are at root
-    if link_path == "/" && parsingResult[i][0,3] == "../"
-        parsingResult[i] = /\/.*/.match(parsingResult[i])[0]
-    elsif parsingResult[i][0,4] != "http" && parsingResult[i][0,1] != "/"
-      parsingResult[i]= link_path + parsingResult[i];
-    end
-
+    # Ensure the link is expanded to a URL
     if parsingResult[i][0,4] != "http"
-      parsingResult[i]= mainUrl.scheme+"://"+mainUrl.host + ':' + mainUrl.port.to_s + parsingResult[i]
+      parsingResult[i]= mainUrl.merge(parsingResult[i]).to_s;
     end
 
     begin
-      #test if url
+      # test if url
       url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
       if SPAN_HOSTS == 0 && url.host != mainUrl.host
         if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
@@ -365,8 +393,11 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
         reports['totalDlTime'] += t1
         reports['totalSize'] += rbody.length
       end
-      if rhead.code =~ /[^2]../ then reports['fileErrorCount'] += 1 end
-      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s.gsub(mainUrl.scheme+"://"+mainUrl.host,"")+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if rhead.code =~ /[^2]../ then
+        reports['fileErrorCount'] += 1
+        log_content(myLink, rhead, rbody)
+      end
+      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
   threads.each { |aThread|  aThread.join }
@@ -378,15 +409,15 @@ startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
 rhead,rbody = getUrl(mainUrl, httpHeaders, proxy, postData)
 
-## handle redirectiol
+## handle redirection
 ###############################################################
 i=0 #redirect count
 while rhead.code =~ /3../
   lastHost = mainUrl.host #issue 7
   begin
     mainUrl = URI.parse(rhead['location'])
-	if mainUrl.host.nil?
-	  mainUrl.host = lastHost #issue 7
+        if mainUrl.host.nil?
+          mainUrl.host = lastHost #issue 7
     end
   rescue
     puts "Critical: can't parse redirected url ..."
@@ -404,6 +435,7 @@ end
 ###############################################################
 if rhead.code =~ /[^2]../
   puts "Critical: main page rcode is #{rhead.code} - #{rhead.message}"
+  log_content(mainUrl, rhead, rbody)
   exit 2
 end
 
@@ -417,7 +449,7 @@ if gzip == 1 && rhead['Content-Encoding'] == 'gzip'
   begin
     rbody = Zlib::GzipReader.new(StringIO.new(rbody)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
-    puts "Critical: error while inflating gziped url '#{mainUrl}': "+$!.to_s
+    puts "Critical: error while inflating gzipped url '#{mainUrl}': "+$!.to_s
     exit 2
   end
 end
@@ -433,6 +465,7 @@ if keyword != nil
   }
   if hasKey==0
     puts "Critical: string not found"
+    log_content(mainUrl, rhead, rbody)
     exit 2
   end
 end
@@ -476,6 +509,12 @@ elsif EXTENDED == 1 && totalTime >= timeWarn2 && totalTime < timeCritical # not 
 else # bad :(
   retCode=2
   retCodeLabel="Critical"
+end
+
+## Store main page content if not OK
+###############################################################
+if retCode > 0 then
+    log_content(mainUrl, rhead, rbody)
 end
 
 ## show the error file count in output
