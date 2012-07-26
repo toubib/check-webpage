@@ -71,6 +71,10 @@ module Example extend OptiFlagSet
     long_form "critical"
     description "--critical, default 60,  Critical time (s)"
   end
+  optional_flag "C" do
+    long_form "cookie"
+    description '--cookie "key=value[;key=value]"'
+  end
   optional_flag "w" do
     long_form "warn"
     description "--warn, default 5,  warn time (s)"
@@ -143,6 +147,10 @@ if ARGV.flags.c?
   timeCritical=ARGV.flags.c.to_f
 else
   timeCritical=60
+end
+
+if ARGV.flags.C?
+  httpHeaders['Cookie'] = ARGV.flags.C
 end
 
 if ARGV.flags.w?
@@ -308,6 +316,23 @@ def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
     else
       r,d = _h.get(path, httpHeaders)
     end
+
+	#Get response cookies and set them again
+    r_cookies = r.get_fields('set-cookie')
+
+	if ! r_cookies.nil?
+		cookies_temp_array = Array.new
+		r_cookies.each { | cookie |
+			cookies_temp_array.push(cookie.split('; ')[0])
+		}
+		httpHeaders['Cookie'] = cookies_temp_array.join('; ')
+	end
+
+	if DEBUG >= 2
+	then
+	  printf "COOKIE: %s\n", r_cookies
+	end
+
   rescue Timeout::Error
     puts "Critical: timeout #{REQUEST_TIMEOUT}s on [#{parsedUri.path}]"
     exit 2
