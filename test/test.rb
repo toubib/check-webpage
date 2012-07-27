@@ -44,4 +44,15 @@ class TestCheckWebpage < Test::Unit::TestCase
      assert_match( /.*\, 3 files\,.*/, %x[../check_webpage.rb -u #{WEB_SERVER_URL}/subfolder/] )
   end
 
+  # test cookies
+  def test_cookie1
+     assert( system( '../check_webpage.rb -u -C "gordon=freeman" -k freeman '+WEB_SERVER_URL+'/cookie' ) )
+  end
+  def test_cookie2
+     assert_equal(false, system( '../check_webpage.rb -u -C "gordon=potato" -k freeman '+WEB_SERVER_URL+'/cookie' ) )
+  end
+
+  def test_timeout
+    assert_equal(false, system( '../check_webpage.rb -c 2 -u '+WEB_SERVER_URL+'/wait3s' ) )
+  end
 end
