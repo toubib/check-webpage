@@ -24,7 +24,7 @@ function check_if_OK {
 
   echo -ne "search OK for $OPTS"
 
-  ./check_webpage.rb $OPTS|egrep "^OK" > /dev/null
+  ../check_webpage.rb $OPTS|egrep "^OK" > /dev/null
 
   if [ $? -eq 0 ]
   then
@@ -58,25 +58,19 @@ echo "test proxy server"
 netcat -v -w 1 $PROXY_ADDRESS -z $PROXY_PORT && PROXY_USE=1
 echo
 
+if [ $PROXY_USE -eq 0 ];then
+	echo "Error cant contact proxy"
+	exit
+fi
+
 # LAUNCH TEST FOR EACH RUBY VERSION
 for v in $RVM_VERSIONS
 do
 	rvm use $v
 	
 	echo
-	check_if_OK "-u http://google.com"
-	check_if_OK "-u http://google.com -vv"
-	check_if_OK "-u http://google.com -k google"
-	check_if_OK "-u http://google.com -k google -z"
-	check_if_OK "-u http://google.com -k google -z -n"
-	test $PROXY_USE -eq 1 && check_if_OK "-u http://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
-
-	check_if_OK "-u https://google.com"
-	test $PROXY_USE -eq 1 && check_if_OK "-u https://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
-	
-	echo
-	check_if_ERR "-u http://4dsHfNYD4KRyktGH.com" 
-	check_if_ERR "-u http://google.com -k 4dsHfNYD4KRyktGH"
+	check_if_OK "-u http://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
+	check_if_OK "-u https://google.com -P $PROXY_ADDRESS:$PROXY_PORT"
 	
 	echo
 done
