@@ -45,14 +45,15 @@ class TestCheckWebpage < Test::Unit::TestCase
   end
 
   # test cookies
-  def test_cookie1
-     assert( system( '../check_webpage.rb -u -C "gordon=freeman" -k freeman '+WEB_SERVER_URL+'/cookie' ) )
+  def test_cookie_exist
+     assert( system( '../check_webpage.rb -C "gordon=freeman" -k freeman -u '+WEB_SERVER_URL+'/cookie' ) )
   end
-  def test_cookie2
-     assert_equal(false, system( '../check_webpage.rb -u -C "gordon=potato" -k freeman '+WEB_SERVER_URL+'/cookie' ) )
+  def test_cookie_not_found
+     assert_equal(false, system( '../check_webpage.rb -C "gordon=potato" -k freeman -u '+WEB_SERVER_URL+'/cookie' ) )
   end
 
+  #test timeout
   def test_timeout
-    assert_equal(false, system( '../check_webpage.rb -c 2 -u '+WEB_SERVER_URL+'/wait3s' ) )
+    assert_equal(false, system( '../check_webpage.rb -c 1 -u '+WEB_SERVER_URL+'/wait3s' ) )
   end
 end
