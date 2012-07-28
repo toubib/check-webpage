@@ -192,10 +192,10 @@ else
 end
 
 if ARGV.flags.z?
-  gzip=1
+  gzip = 1
   httpHeaders['Accept-Encoding'] = "gzip,deflate"
 else
-  gzip=0
+  gzip = 0
 end
 
 if ARGV.flags.n?
@@ -205,15 +205,15 @@ else
 end
 
 if ARGV.flags.H?
-  SPAN_HOSTS=1
+  SPAN_HOSTS = 1
 else
-  SPAN_HOSTS=0
+  SPAN_HOSTS = 0
 end
 
 if ARGV.flags.l?
-  LOG=ARGV.flags.l
+  LOG = ARGV.flags.l
 else
-  LOG=nil
+  LOG = nil
 end
 
 inputURL=ARGV.flags.u
@@ -263,15 +263,14 @@ def filename_safe(filename)
 end
 
 
-def log_content(url, response, body) 
-  if LOG.nil? then
-    return
-  end
+def log_content(url, response) 
+  return if LOG.nil?
+
   logstamp = DateTime.now().strftime('%F:%H:%M:%S')
   logfile = File.join(LOG, filename_safe(url.to_s) + '-' + logstamp)
   logfile = File.new(logfile, "w")
-  response.header.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
-  logfile.write("\n#{body}\n")
+  response.each_header {|key,value| logfile.write "#{key}: #{value}\n" }
+  logfile.write("\n#{response.body}\n")
 end
 
 
@@ -312,13 +311,13 @@ def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
       path = parsedUri.path + '?' + parsedUri.query
     end
     if postData != nil
-      r,d = _h.post(path, postData, httpHeaders)
+      res = _h.post(path, postData, httpHeaders)
     else
-      r,d = _h.get(path, httpHeaders)
+      res = _h.get(path, httpHeaders)
     end
 
 	#Get response cookies and set them again
-    r_cookies = r.get_fields('set-cookie')
+    r_cookies = res.get_fields('set-cookie')
 
 	if ! r_cookies.nil?
 		cookies_temp_array = Array.new
@@ -341,7 +340,8 @@ def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
     exit 2
   end
 
-  return r,d
+  #p "DEBUGLAG body2=#{res.body}"
+  return res
 end
 
 ## get inner links function
@@ -408,21 +408,21 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
   linksToDl.each {  |link|
     threads << Thread.new(link) { |myLink|
       t0 = Time.now
-      rhead, rbody = getUrl(myLink, httpHeaders, proxy)
-      if rbody == nil then
+      res = getUrl(myLink, httpHeaders, proxy)
+      if res == nil then
         # Happens when '204 no content' occurs
-        rbody = ''
+        res = ''
       end
       t1 = Time.now-t0
       mutex.synchronize do
         reports['totalDlTime'] += t1
-        reports['totalSize'] += rbody.length
+        reports['totalSize'] += res.length
       end
-      if rhead.code =~ /[^2]../ then
+      if res.code =~ /[^2]../ then
         reports['fileErrorCount'] += 1
-        log_content(myLink, rhead, rbody)
+        log_content(myLink, res, res)
       end
-      if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} "+myLink.to_s+" -> s(#{rbody.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
   }
   threads.each { |aThread|  aThread.join }
@@ -432,15 +432,15 @@ end
 ###############################################################
 startedTime = Time.now
 if DEBUG >= 1 then puts "\n * Get main page: #{mainUrl}" end
-rhead,rbody = getUrl(mainUrl, httpHeaders, proxy, postData)
+res = getUrl(mainUrl, httpHeaders, proxy, postData)
 
 ## handle redirection
 ###############################################################
 i=0 #redirect count
-while rhead.code =~ /3../
+while res.code =~ /3../
   lastHost = mainUrl.host #issue 7
   begin
-    mainUrl = URI.parse(rhead['location'])
+    mainUrl = URI.parse(res['location'])
         if mainUrl.host.nil?
           mainUrl.host = lastHost #issue 7
     end
@@ -448,8 +448,9 @@ while rhead.code =~ /3../
     puts "Critical: can't parse redirected url ..."
     exit 2
   end
-  if DEBUG >= 1 then puts "   -> #{rhead.code}, main page is now: #{mainUrl}" end
-  rhead, rbody = getUrl(mainUrl, httpHeaders, proxy)
+  if DEBUG >= 1 then puts "   -> #{res.code}, main page is now: #{mainUrl}" end
+  res = getUrl(mainUrl, httpHeaders, proxy)
+
   if (i+=1) >= MAX_REDIRECT
     puts "Critical: too much redirect (#{MAX_REDIRECT}), exit"
     exit 2
@@ -458,21 +459,21 @@ end
 
 ## check main url return code
 ###############################################################
-if rhead.code =~ /[^2]../
-  puts "Critical: main page rcode is #{rhead.code} - #{rhead.message}"
-  log_content(mainUrl, rhead, rbody)
+if res.code =~ /[^2]../
+  puts "Critical: main page rcode is #{res.code} - #{res.message}"
+  log_content(mainUrl, res)
   exit 2
 end
 
 ## Get main url page size
 ###############################################################
-reports['totalSize'] = rbody.length
+reports['totalSize'] = res.length
 
 ## inflate if gzip is on
 ###############################################################
-if gzip == 1 && rhead['Content-Encoding'] == 'gzip'
+if gzip == 1 && res['Content-Encoding'] == 'gzip'
   begin
-    rbody = Zlib::GzipReader.new(StringIO.new(rbody)).read
+    res = Zlib::GzipReader.new(StringIO.new(res)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
     puts "Critical: error while inflating gzipped url '#{mainUrl}': "+$!.to_s
     exit 2
@@ -483,23 +484,23 @@ end
 ###############################################################
 if keyword != nil
   hasKey=0
-  rbody.each_line { |line|
+  res.body.each_line { |line|
     if line =~ /#{keyword}/
       hasKey=1
     end
   }
   if hasKey==0
     puts "Critical: string not found"
-    log_content(mainUrl, rhead, rbody)
+    log_content(mainUrl, res)
     exit 2
   end
 end
 
-if DEBUG >= 1 then puts "[#{rhead.code}] #{rhead.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
+if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
 
 ## inner links part
 ###############################################################
-getInnerLinks(mainUrl, rbody, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
+getInnerLinks(mainUrl, res.body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
@@ -539,7 +540,7 @@ end
 ## Store main page content if not OK
 ###############################################################
 if retCode > 0 then
-    log_content(mainUrl, rhead, rbody)
+    log_content(mainUrl, res)
 end
 
 ## show the error file count in output
