@@ -416,7 +416,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
       t1 = Time.now-t0
       mutex.synchronize do
         reports['totalDlTime'] += t1
-        reports['totalSize'] += res.length
+        reports['totalSize'] += res.body.length
       end
       if res.code =~ /[^2]../ then
         reports['fileErrorCount'] += 1
@@ -467,7 +467,7 @@ end
 
 ## Get main url page size
 ###############################################################
-reports['totalSize'] = res.length
+reports['totalSize'] = res.body.length
 
 ## inflate if gzip is on
 ###############################################################
@@ -496,7 +496,15 @@ if keyword != nil
   end
 end
 
-if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
+## set total size report
+###############################################################
+if reports['totalSize'] < 1000
+	totalSizeReport = reports['totalSize'].to_s + "B"
+else
+	totalSizeReport = (reports['totalSize']/1000).to_s + "KB"
+end
+
+if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{totalSizeReport}) t(#{Time.now-startedTime})" end
 
 ## inner links part
 ###############################################################
@@ -507,12 +515,13 @@ getInnerLinks(mainUrl, res.body, httpHeaders, reports, proxy) unless GET_INNER_L
 finishedTime = Time.now
 totalTime=finishedTime-startedTime
 
+
 if DEBUG >= 1
   puts "\n * results"
   puts "Inner links count: #{reports['linksToDlCount']}"
   puts "Inner links dl cumulated time: "+sprintf("%.2f", reports['totalDlTime']) + "s"
   puts "Total time: "+sprintf("%.2f", totalTime)+"s"
-  puts "Total size: #{reports['totalSize']/1000}ko"
+  puts "Total size: #{totalSizeReport}"
   puts "\n"
 end
 
@@ -551,9 +560,10 @@ else
   fileErrorStr=""
 end
 
+
 ## print the script result for nagios
 ###############################################################
-print "#{retCodeLabel} - #{reports['totalSize']/1000}ko, #{reports['linksToDlCount']+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
-print "|size="+"#{reports['totalSize']/1000}"+"KB "+"time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0;#{REQUEST_TIMEOUT}"
+print "#{retCodeLabel} - #{totalSizeReport}, #{reports['linksToDlCount']+1} files#{fileErrorStr}, "+sprintf("%.2f", totalTime)+"s"
+print "|size="+"#{totalSizeReport}"+" "+"time="+sprintf("%.2f", totalTime)+"s;#{timeWarn};#{timeCritical};0;#{REQUEST_TIMEOUT}"
 print "\n"
 exit retCode
