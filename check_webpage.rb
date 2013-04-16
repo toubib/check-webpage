@@ -33,16 +33,24 @@
 # - check if threadsafe ( totalX+=1 problem )
 # - check if inner links search is exhaustive enough ( uppercase element problem ... )
 
-require 'thread'
-require 'net/http'
-require 'net/https'
-require 'open-uri'
-require 'rubygems'
-require 'hpricot'
-require 'optiflag'
-require 'zlib'
-require 'base64'
-require 'date'
+begin
+  require 'thread'
+  require 'net/http'
+  require 'net/https'
+  require 'open-uri'
+  require 'rubygems'
+  require 'hpricot'
+  require 'optiflag'
+  require 'zlib'
+  require 'base64'
+  require 'date'
+  
+  rescue LoadError => e
+   mgem = /\w+$/.match(e.message)
+   puts "#{mgem} required."
+   puts "Please install with 'gem install #{mgem}'"
+   exit
+end
 
 MAX_REDIRECT=5 #set max redirect to prevent infinite loop
 
@@ -234,7 +242,9 @@ begin
   if inputURL.index("http") != 0
     inputURL ="http://"+inputURL
   end
-  mainUrl = URI.parse(inputURL)
+  uri = URI.escape(inputURL)
+  #mainUrl = URI.parse(inputURL)
+  mainUrl = URI.parse(uri)
 rescue
   puts "Critical: syntax error, can't parse url ..."
   exit 2
@@ -440,9 +450,9 @@ i=0 #redirect count
 while res.code =~ /3../
   lastHost = mainUrl.host #issue 7
   begin
-    mainUrl = URI.parse(res['location'])
-        if mainUrl.host.nil?
-          mainUrl.host = lastHost #issue 7
+    mainUrl = URI.parse(URI.escape(res['location']))
+    if mainUrl.host.nil?
+       mainUrl.host = lastHost #issue 7
     end
   rescue
     puts "Critical: can't parse redirected url ..."
@@ -460,9 +470,17 @@ end
 ## check main url return code
 ###############################################################
 if res.code =~ /[^2]../
-  puts "Critical: main page rcode is #{res.code} - #{res.message}"
+  if res.code == "401" && ARGV.flags.a.nil? # server respond but authentication required 
+    text = "OK: server respond but rcode is "
+    result = 0
+  else
+    text = "Critical: main page rcode is "
+    result = 2
+  end
+
+  puts "#{text} #{res.code} - #{res.message}"
   log_content(mainUrl, res)
-  exit 2
+  exit result
 end
 
 ## Get main url page size
