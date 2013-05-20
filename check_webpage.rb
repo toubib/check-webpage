@@ -420,7 +420,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
       end
       if res.code =~ /[^2]../ then
         reports['fileErrorCount'] += 1
-        log_content(myLink, res, res)
+        log_content(myLink, res)
       end
       if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.length}o) t("+sprintf("%.2f", t1)+"s)" end
     }
