@@ -56,4 +56,9 @@ class TestCheckWebpage < Test::Unit::TestCase
   def test_timeout
     assert_equal(false, system( '../check_webpage.rb -c 1 -u '+WEB_SERVER_URL+'/wait3s' ) )
   end
+
+  def test_auth_err
+    assert_equal(true, system( '../check_webpage.rb -u '+WEB_SERVER_URL+'/401' ) )
+    assert_equal(false, system( '../check_webpage.rb -a test -u '+WEB_SERVER_URL+'/401' ) )
+  end
 end

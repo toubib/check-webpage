@@ -16,3 +16,8 @@ get '/wait3s' do
   sleep 3
   erb :index
 end
+
+get '/401' do
+  headers['WWW-Authenticate'] = 'Basic realm="Restricted Area"'
+  halt 401, "Not authorized\n"
+end
