@@ -239,7 +239,6 @@ begin
     inputURL ="http://"+inputURL
   end
   uri = URI.escape(inputURL)
-  #mainUrl = URI.parse(inputURL)
   mainUrl = URI.parse(uri)
 rescue
   puts "Critical: syntax error, can't parse url ..."
