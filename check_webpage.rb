@@ -16,7 +16,7 @@
 #       Copyright Vincent Reydet
 
 # Project: nagios-check-webpage 
-# Website: http://code.google.com/p/nagios-check-webpage/
+# Website: https://github.com/Toubib/check-webpage/
 
 # To use in nagios:
 #   - Put the script into the $USER1$ directory
@@ -27,11 +27,7 @@
 #     }
 
 # Quick documentation: use -h option
-# Full documentation: http://code.google.com/p/nagios-check-webpage/wiki/Documentation
-
-# TODO
-# - check if threadsafe ( totalX+=1 problem )
-# - check if inner links search is exhaustive enough ( uppercase element problem ... )
+# Full documentation: https://github.com/Toubib/check-webpage/wiki/Documentation-en
 
 require 'thread'
 require 'net/http'
