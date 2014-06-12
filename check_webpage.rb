@@ -498,7 +498,7 @@ end
 if keyword != nil
   hasKey=0
   res.body.each_line { |line|
-    if line =~ /#{keyword}/
+    if line.include? keyword
       hasKey=1
     end
   }
