@@ -44,6 +44,10 @@ Total size: 15ko
 
 OK - 15ko, 2 files, 0.35s
 ```
+Download
+--------
+
+https://github.com/Toubib/check-webpage/releases/latest
 
 Documentation
 -------------
