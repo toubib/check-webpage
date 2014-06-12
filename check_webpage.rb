@@ -485,18 +485,20 @@ reports['totalSize'] = res.body.length
 ###############################################################
 if gzip == 1 && res['Content-Encoding'] == 'gzip'
   begin
-    res = Zlib::GzipReader.new(StringIO.new(res)).read
+    res_body = Zlib::GzipReader.new(StringIO.new(res.body)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
     puts "Critical: error while inflating gzipped url '#{mainUrl}': "+$!.to_s
     exit 2
   end
+else
+  res_body = res.body
 end
 
 ## Check for keyword ( -k option )
 ###############################################################
 if keyword != nil
   hasKey=0
-  res.body.each_line { |line|
+  res_body.each_line { |line|
     if line.include? keyword
       hasKey=1
     end
