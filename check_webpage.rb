@@ -345,7 +345,6 @@ def getUrl( parsedUri, httpHeaders, proxy, postData = nil )
     exit 2
   end
 
-  #p "DEBUGLAG body2=#{res.body}"
   return res
 end
 
