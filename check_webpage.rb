@@ -522,7 +522,7 @@ if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{totalSizeReport}) t(#{
 
 ## inner links part
 ###############################################################
-getInnerLinks(mainUrl, res.body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
+getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
