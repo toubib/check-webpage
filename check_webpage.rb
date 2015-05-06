@@ -135,6 +135,16 @@ module Example extend OptiFlagSet
     description "--graphite-host, send response time to this graphite host"
   end
 
+  optional_flag "Gp" do
+    long_form "graphite-port"
+    description "--graphite-port, the graphite server UDP port to use"
+  end
+
+  optional_flag "Gx" do
+    long_form "graphite-prefix"
+    description "--graphite-prefix, prefix the graphite path (default to 'webpage')"
+  end
+
   and_process!
 end 
 
@@ -226,12 +236,23 @@ else
   LOG = nil
 end
 
+if ARGV.flags.Gx?
+	GRAPHITE_BUCKET_PRE=ARGV.flags.Gx
+else
+	GRAPHITE_BUCKET_PRE='webpage'
+end
+
 if ARGV.flags.Gh?
 	GRAPHITE_HOST=ARGV.flags.Gh
-	GRAPHITE_BUCKET_PRE='webpage.'
-	GRAPHITE_BUCKET=ARGV.flags.u.sub(/http:\/\//,'').tr('.','-')
+	GRAPHITE_BUCKET=GRAPHITE_BUCKET_PRE + '.' + ARGV.flags.u.sub(/http:\/\//,'').tr('.','-')
 else
 	GRAPHITE_HOST=nil
+end
+
+if ARGV.flags.Gp?
+	GRAPHITE_PORT=ARGV.flags.Gp
+else
+	GRAPHITE_PORT=2003
 end
 
 inputURL=ARGV.flags.u
@@ -294,7 +315,7 @@ end
 
 #send data to graphite with UDP
 class Graphite
-  def initialize(host, port = 2003)
+  def initialize(host, port = GRAPHITE_PORT)
     @host, @port = host, port
   end
 
@@ -460,8 +481,8 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
       if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.body.length}o) t("+sprintf("%.2f", t1)+"s)" end
       if !GRAPHITE_HOST.nil?
         bucket = link.path.tr('./','-')
-	    graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+bucket+'_time', t1*1000)
-	    graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+bucket+'_size', res.body.length)
+	    graphite.push(GRAPHITE_BUCKET+'.'+bucket+'_time', t1*1000)
+	    graphite.push(GRAPHITE_BUCKET+'.'+bucket+'_size', res.body.length)
 	  end
     }
   }
@@ -559,8 +580,8 @@ if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{totalSizeReport}) t(#{
 #send data to graphite
 if !GRAPHITE_HOST.nil?
   graphite = Graphite.new(GRAPHITE_HOST)
-  graphite.push GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+'mainpage_time', (Time.now-startedTime)*1000
-  graphite.push GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+'mainpage_size', reports['totalSize']
+  graphite.push GRAPHITE_BUCKET+'.'+'mainpage_time', (Time.now-startedTime)*1000
+  graphite.push GRAPHITE_BUCKET+'.'+'mainpage_size', reports['totalSize']
 end
 
 ## inner links part
@@ -583,8 +604,8 @@ if DEBUG >= 1
 end
 
 if !GRAPHITE_HOST.nil?
-  graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.total_time', totalTime*1000)
-  graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.total_size', reports['totalSize'])
+  graphite.push(GRAPHITE_BUCKET+'.total_time', totalTime*1000)
+  graphite.push(GRAPHITE_BUCKET+'.total_size', reports['totalSize'])
 end
 
 ## Set exit value
