@@ -40,6 +40,7 @@ begin
   require 'zlib'
   require 'base64'
   require 'date'
+  require 'socket'
   
   rescue LoadError => e
    mgem = /\w+$/.match(e.message)
@@ -127,6 +128,11 @@ module Example extend OptiFlagSet
   optional_flag "l" do
     long_form "log"
     description "--log, log directory to store output on error"
+  end
+
+  optional_flag "Gh" do
+    long_form "graphite-host"
+    description "--graphite-host, send response time to this graphite host"
   end
 
   and_process!
@@ -220,6 +226,14 @@ else
   LOG = nil
 end
 
+if ARGV.flags.Gh?
+	GRAPHITE_HOST=ARGV.flags.Gh
+	GRAPHITE_BUCKET_PRE='webpage.'
+	GRAPHITE_BUCKET=ARGV.flags.u.sub(/http:\/\//,'').tr('.','-')
+else
+	GRAPHITE_HOST=nil
+end
+
 inputURL=ARGV.flags.u
 REQUEST_TIMEOUT=timeCritical
 
@@ -278,6 +292,22 @@ def log_content(url, response)
   logfile.write("\n#{response.body}\n")
 end
 
+#send data to graphite with UDP
+class Graphite
+  def initialize(host, port = 2003)
+    @host, @port = host, port
+  end
+
+  def push(bucket, value)
+    t = Time.now
+    #puts "#{bucket} #{value} #{t.to_i}"
+    socket.send("#{bucket} #{value} #{t.to_i}", 0, @host, @port)
+  end
+
+  def socket
+    @socket ||= UDPSocket.new
+  end
+end
 
 ## get url function
 ###############################################################
@@ -408,6 +438,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
   ## DL content links with threads
   mutex = Mutex.new #set mutex
   if DEBUG >= 1 then puts "\n * downloading inner links (#{linksToDl.length}) ..." end
+  if !GRAPHITE_HOST.nil? then graphite = Graphite.new(GRAPHITE_HOST) end
   threads = []
   linksToDl.each {  |link|
     threads << Thread.new(link) { |myLink|
@@ -426,7 +457,12 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
         reports['fileErrorCount'] += 1
         log_content(myLink, res)
       end
-      if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.body.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if !GRAPHITE_HOST.nil?
+        bucket = link.path.tr('./','-')
+	    graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+bucket+'_time', t1*1000)
+	    graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+bucket+'_size', res.body.length)
+	  end
     }
   }
   threads.each { |aThread|  aThread.join }
@@ -520,6 +556,13 @@ end
 
 if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{totalSizeReport}) t(#{Time.now-startedTime})" end
 
+#send data to graphite
+if !GRAPHITE_HOST.nil?
+  graphite = Graphite.new(GRAPHITE_HOST)
+  graphite.push GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+'mainpage_time', (Time.now-startedTime)*1000
+  graphite.push GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.'+'mainpage_size', reports['totalSize']
+end
+
 ## inner links part
 ###############################################################
 getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
@@ -537,6 +580,11 @@ if DEBUG >= 1
   puts "Total time: "+sprintf("%.2f", totalTime)+"s"
   puts "Total size: #{totalSizeReport}"
   puts "\n"
+end
+
+if !GRAPHITE_HOST.nil?
+  graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.total_time', totalTime*1000)
+  graphite.push(GRAPHITE_BUCKET_PRE+GRAPHITE_BUCKET+'.total_size', reports['totalSize'])
 end
 
 ## Set exit value
