@@ -545,6 +545,7 @@ if gzip == 1 && res['Content-Encoding'] == 'gzip'
     res_body = Zlib::GzipReader.new(StringIO.new(res.body)).read
   rescue Zlib::GzipFile::Error, Zlib::Error
     puts "Critical: error while inflating gzipped url '#{mainUrl}': "+$!.to_s
+    log_content(mainUrl, res)
     exit 2
   end
 else
