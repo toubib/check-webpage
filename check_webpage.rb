@@ -405,11 +405,11 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
 
   ## Parsing main page data
   doc = Hpricot(data)
-  parsingResult =                 doc.search("//img[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'] }
-  parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'] }
-  parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'] }
+  parsingResult =                 doc.search("//img[@src]").map { |x| x['src'].strip }
+  parsingResult = parsingResult + doc.search("//script[@src]").map { |x| x['src'].strip }
+  parsingResult = parsingResult + doc.search("//input[@src]").map { |x| x['src'].strip }
+  parsingResult = parsingResult + doc.search("//link[@href]").map { |x| x['href'].strip }
+  parsingResult = parsingResult + doc.search("//embed[@src]").map { |x| x['src'].strip }
 
   #link_path is path without filename
   link_path = /.*\//.match(mainUrl.path)[0]
