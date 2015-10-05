@@ -244,7 +244,7 @@ end
 
 if ARGV.flags.Gh?
 	GRAPHITE_HOST=ARGV.flags.Gh
-	GRAPHITE_BUCKET=GRAPHITE_BUCKET_PRE + '.' + ARGV.flags.u.sub(/http:\/\//,'').tr('.','-')
+	GRAPHITE_BUCKET=GRAPHITE_BUCKET_PRE + '.' + ARGV.flags.u.sub(/https?:\/\//,'').tr('./','-')
 else
 	GRAPHITE_HOST=nil
 end
