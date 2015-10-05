@@ -433,7 +433,12 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
 
     # Ensure the link is expanded to a URL
     if parsingResult[i][0,4] != "http"
-      parsingResult[i]= mainUrl.merge(parsingResult[i]).to_s;
+      begin
+        parsingResult[i]= mainUrl.merge(parsingResult[i]).to_s;
+      rescue
+        if DEBUG >= 1 then puts "#{parsingResult[i]} ->  pass (bad uri?)" end
+        next
+      end
     end
 
     begin
