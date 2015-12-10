@@ -58,7 +58,9 @@ class TestCheckWebpage < Test::Unit::TestCase
   end
 
   def test_auth_err
-    assert_equal(true, system( '../check_webpage.rb -u '+WEB_SERVER_URL+'/401' ) )
+    assert_equal(true,  system( '../check_webpage.rb -u '+WEB_SERVER_URL+'/401 -vhc 401') )
+    assert_equal(true,  system( '../check_webpage.rb -u '+WEB_SERVER_URL+'/401 -vhc 404,401') )
+    assert_equal(false, system( '../check_webpage.rb -u '+WEB_SERVER_URL+'/401' ) )
     assert_equal(false, system( '../check_webpage.rb -a test -u '+WEB_SERVER_URL+'/401' ) )
   end
 end

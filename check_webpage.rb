@@ -145,6 +145,11 @@ module Example extend OptiFlagSet
     description "--graphite-prefix, prefix the graphite path (default to 'webpage')"
   end
 
+  optional_flag "vhc" do
+    long_form "valid-http-codes"
+    description "--valid-http-codes XXX,XXX (ex 401,404)"
+  end
+
   and_process!
 end 
 
@@ -193,6 +198,12 @@ end
 
 if ARGV.flags.a?
   httpHeaders['Authorization'] = 'Basic '+Base64.encode64(ARGV.flags.a)
+end
+
+if ARGV.flags.vhc?
+  validHttpCodes = ARGV.flags.vhc.split(',')
+else
+  validHttpCodes = []
 end
 
 if ARGV.flags.p?
@@ -526,11 +537,11 @@ end
 ## check main url return code
 ###############################################################
 if res.code =~ /[^2]../
-  if res.code == "401" && ARGV.flags.a.nil? # server respond but authentication required 
-    text = "OK: server respond but rcode is "
+  if validHttpCodes.include? res.code
+    text = "OK: server respond with http code "
     result = 0
   else
-    text = "Critical: main page rcode is "
+    text = "Critical: main page http code is "
     result = 2
   end
 
