@@ -494,7 +494,7 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
         reports['fileErrorCount'] += 1
         log_content(myLink, res)
       end
-      if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.body.length}o) t("+sprintf("%.2f", t1)+"s)" end
+      if DEBUG >= 1 then puts "[#{res.code}] #{res.message} "+myLink.to_s+" -> s(#{res.body.length}B) t("+sprintf("%.2f", t1)+"s)" end
       if !GRAPHITE_HOST.nil?
         bucket = link.path.tr('./','-')
 	    graphite.push(GRAPHITE_BUCKET+'.'+bucket+'_time', t1*1000)
