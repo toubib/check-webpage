@@ -454,13 +454,20 @@ def getInnerLinks (mainUrl, data, httpHeaders, reports, proxy)
 
     begin
       # test if url
-      url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
+      if RUBY_VERSION =~ /1.8/
+        url = URI.parse(URI.escape(parsingResult[i],"[]{}|+"))
+      else
+        url = URI.parse(URI.escape(parsingResult[i].encode('UTF-8'),"[]{}|+"))
+      end
       if SPAN_HOSTS == 0 && url.host != mainUrl.host
         if DEBUG >= 2 then puts "#{parsingResult[i]} -> pass" end
         next
       end
     rescue URI::InvalidURIError
-      if DEBUG >= 2 then puts "#{parsingResult[i]} -> error" end
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> error invalid URI" end
+      next
+    rescue
+      if DEBUG >= 2 then puts "#{parsingResult[i]} -> unexpected error" end
       next
     end
     if DEBUG >= 2 then puts "#{parsingResult[i]} -> add" end
