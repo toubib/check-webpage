@@ -591,6 +591,12 @@ if keyword != nil
   end
 end
 
+if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{reports['totalSize']}) t(#{Time.now-startedTime})" end
+
+## inner links part
+###############################################################
+getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
+
 ## set total size report
 ###############################################################
 if reports['totalSize'] < 1000
@@ -599,18 +605,12 @@ else
 	totalSizeReport = (reports['totalSize']/1000).to_s + "KB"
 end
 
-if DEBUG >= 1 then puts "[#{res.code}] #{res.message} s(#{totalSizeReport}) t(#{Time.now-startedTime})" end
-
 #send data to graphite
 if !GRAPHITE_HOST.nil?
   graphite = Graphite.new(GRAPHITE_HOST)
   graphite.push GRAPHITE_BUCKET+'.'+'mainpage_time', (Time.now-startedTime)*1000
   graphite.push GRAPHITE_BUCKET+'.'+'mainpage_size', reports['totalSize']
 end
-
-## inner links part
-###############################################################
-getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
