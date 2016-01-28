@@ -591,6 +591,10 @@ if keyword != nil
   end
 end
 
+## inner links part
+###############################################################
+getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
+
 ## set total size report
 ###############################################################
 if reports['totalSize'] < 1000
@@ -607,10 +611,6 @@ if !GRAPHITE_HOST.nil?
   graphite.push GRAPHITE_BUCKET+'.'+'mainpage_time', (Time.now-startedTime)*1000
   graphite.push GRAPHITE_BUCKET+'.'+'mainpage_size', reports['totalSize']
 end
-
-## inner links part
-###############################################################
-getInnerLinks(mainUrl, res_body, httpHeaders, reports, proxy) unless GET_INNER_LINKS == 0
 
 ## Get Statistics
 ###############################################################
