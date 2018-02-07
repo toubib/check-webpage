@@ -3,7 +3,7 @@ GEM
   specs:
     daemons (1.2.2)
     eventmachine (1.0.7)
-    rack (1.6.0)
+    rack (1.6.2)
     rack-protection (1.5.3)
       rack
     sinatra (1.4.6)
