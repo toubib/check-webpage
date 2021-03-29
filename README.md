@@ -1,3 +1,5 @@
+THIS PROJECT IS NOT ACTIVE ANYMORE.
+
 check-webpage
 =============
 
